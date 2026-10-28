@@ -31,7 +31,7 @@ Serviço financeiro distribuído (Bun + TypeScript estrito + NestJS + MikroORM +
 
 ## Comandos
 
-> Atualizado na T-006: o que está sem marcação **existe e funciona**; o que diz "a criar" ainda é contrato. Bun 1.4.4 fica em `~/.bun/bin` (exporte no `PATH` se o shell não carregar).
+> Atualizado na T-006 (e na T-026, `dev`): o que está sem marcação **existe e funciona**; o que diz "a criar" ainda é contrato. Bun 1.4.4 fica em `~/.bun/bin` (exporte no `PATH` se o shell não carregar).
 
 ```
 bun install                    # roda `prepare` -> hooks:install (core.hooksPath=.githooks)
@@ -43,6 +43,7 @@ bun run test:infra:down        # derruba e apaga os volumes
 bun run test:integration       # exige test:infra:up
 bun run test:concurrency       # sem testes até a W7 (passa vazio)
 bun run test                   # unit + integration + concurrency
+bun run dev                    # app local (bun --watch src/main.ts; exige DATABASE_URL; flags ENABLE_*; T-026)
 bun run queues:create          # cria/confere as filas (SQS_ENDPOINT; padrão = compose de dev, 4566)
 bun run migration:up | migration:down | migration:create   # exige DATABASE_URL (MIGRATIONS_PATH, padrão src/migrations)
 bun run hooks:install          # git config core.hooksPath .githooks (commitlint no commit-msg)
@@ -50,7 +51,6 @@ bun run spike:nest-mikro | spike:sqs | spike:tooling   # spikes da W1 (exigem te
 docker compose up -d --wait    # infra de dev: só Postgres (5432) + SQS (4566); depois `bun run queues:create`
 
 # a criar:
-bun run dev                    # app local (a criar na T-026, bootstrap Nest)
 bun run test:load              # stretch (S-01)
 docker compose up --build      # app1..3 + Postgres + SQS emulado (a criar na T-005b, W10)
 ```
