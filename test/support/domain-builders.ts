@@ -64,6 +64,7 @@ export async function openWalletWithOpening(
 	now = new Date(),
 ): Promise<Wallet> {
 	const wallet = newWallet(amount, now);
+	p.created.push(wallet.id);
 	await p.tm.run(async () => {
 		await p.wallets.insert(wallet);
 		const opening = newTransaction({
@@ -91,4 +92,46 @@ export async function openWalletWithOpening(
 		);
 	});
 	return wallet;
+}
+
+/** A wallet born with zero balance: version 1, no OPENING transaction, no ledger entry. */
+export async function openZeroWallet(p: Persistence): Promise<Wallet> {
+	const wallet = newWallet("0.00");
+	p.created.push(wallet.id);
+	await p.tm.run(() => p.wallets.insert(wallet));
+	return wallet;
+}
+
+/**
+ * Applies one BET (debit) or WIN (credit) the way the use case will, in the canonical lock order:
+ * wallet FOR UPDATE, then the transaction row, then wallet update + ledger entry.
+ */
+export async function applyTransaction(
+	p: Persistence,
+	walletId: string,
+	kind: WagerTransactionKind.Bet | WagerTransactionKind.Win,
+	amount: string,
+	now = new Date(),
+): Promise<void> {
+	await p.tm.run(async () => {
+		const wallet = await p.wallets.findByIdForUpdate(walletId);
+		if (!wallet) throw new Error(`wallet ${walletId} not found`);
+		const tx = newTransaction({
+			walletId,
+			playerId: wallet.playerId,
+			kind,
+			amount,
+			now,
+		});
+		await p.transactions.insertIfAbsent(tx);
+		const money = brl(amount);
+		const entry =
+			kind === WagerTransactionKind.Bet
+				? wallet.debit(money, tx.id, now, uniqueId())
+				: wallet.credit(money, tx.id, now, uniqueId());
+		await p.wallets.updateBalance(wallet, wallet.version - 1);
+		await p.ledger.append(entry);
+		tx.markProcessed(undefined, now, wallet.balance);
+		await p.transactions.update(tx, now);
+	});
 }

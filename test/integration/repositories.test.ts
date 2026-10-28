@@ -8,6 +8,7 @@ import { WagerTransactionKind } from "../../src/modules/wagering/domain/wager-tr
 import { WagerTransactionStatus } from "../../src/modules/wagering/domain/wager-transaction-status";
 import { VersionAssertionError } from "../../src/modules/wallet/application/wallet-repository";
 import { LedgerDirection } from "../../src/modules/wallet/domain/wallet-ledger-entry";
+import { assertCreatedWalletsConsistent } from "../support/assertLedgerInvariant";
 import {
 	brl,
 	newTransaction,
@@ -143,12 +144,37 @@ describe("X-11 wallet balance update with the version assertion", () => {
 
 	test("X-11 the same update applied twice fails the second time", async () => {
 		const wallet = await openWalletWithOpening(p, "100.00");
-		const copy = await p.wallets.findById(wallet.id);
-		if (!copy) throw new Error("wallet vanished");
-		copy.credit(brl("1.00"), uniqueId(), new Date(), uniqueId());
-		await p.wallets.updateBalance(copy, 1);
-		await expect(p.wallets.updateBalance(copy, 1)).rejects.toBeInstanceOf(
-			VersionAssertionError,
+		const credit = newTransaction({
+			walletId: wallet.id,
+			playerId: wallet.playerId,
+			kind: WagerTransactionKind.Win,
+			amount: "1.00",
+		});
+
+		const secondAttempt = await p.tm.run(async () => {
+			const locked = await p.wallets.findByIdForUpdate(wallet.id);
+			if (!locked) throw new Error("wallet vanished");
+			await p.transactions.insertIfAbsent(credit);
+			const entry = locked.credit(
+				credit.money,
+				credit.id,
+				new Date(),
+				uniqueId(),
+			);
+			await p.wallets.updateBalance(locked, 1);
+			await p.ledger.append(entry);
+			credit.markProcessed(undefined, new Date(), locked.balance);
+			await p.transactions.update(credit, new Date());
+			// The guard is a zero-row UPDATE, not a SQL error: the transaction stays usable and commits.
+			return p.wallets.updateBalance(locked, 1).then(
+				() => undefined,
+				(e: unknown) => e,
+			);
+		});
+
+		expect(secondAttempt).toBeInstanceOf(VersionAssertionError);
+		expect((await p.wallets.findById(wallet.id))?.balance.toString()).toBe(
+			"101.00",
 		);
 	});
 
@@ -590,5 +616,12 @@ describe("X-13 inbox and outbox repositories", () => {
 			}),
 		).rejects.toThrow("business failure");
 		expect(await p.outbox.findById(message.id)).toBeUndefined();
+	});
+});
+
+describe("TST-I-14 invariant over what this suite created", () => {
+	test("TST-I-14 every wallet created through the repositories still satisfies the ledger invariant", async () => {
+		expect(p.created.length).toBeGreaterThan(10);
+		await assertCreatedWalletsConsistent(p.ledgerIntegrity, p.created);
 	});
 });

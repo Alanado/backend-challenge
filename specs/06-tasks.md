@@ -36,7 +36,7 @@ Resultados do spike: ver [adr/0002-spike.md](adr/0002-spike.md).
 - [x] **T-023** Migration 3: `inbox_messages`, `outbox_messages`. *(RF-OUT-*, RF-MSG-02)*
 - [x] **T-024** EntitySchemas + mappers + repositórios (wallet com `FOR UPDATE`, transação, ledger, inbox, outbox). *(ADR-0004)*
 - [x] **T-025a** *(antes de T-021)* Infra de teste: banco template migrado uma vez, `createSuiteDatabase`, filas por suíte (com DLQ e redrive), `eventually`. *(05-test-plan §2)*
-- [ ] **T-025b** *(depois de T-024)* `assertLedgerInvariant`: leitura SQL em snapshot em `wallet/infrastructure`, **a mesma função** que T-035 reaproveita na reconciliação; confere `balance = Σ ledger`, cadeia contínua, saldo ≥ 0, `version` coerente. *(ADR-0016, ADR-0019; TST-I-14 parcial)*
+- [x] **T-025b** *(depois de T-024)* `assertLedgerInvariant`: leitura SQL em snapshot em `wallet/infrastructure`, **a mesma função** que T-035 reaproveita na reconciliação; confere `balance = Σ ledger`, cadeia contínua, saldo ≥ 0, `version` coerente. *(ADR-0016, ADR-0019; TST-I-14 parcial)*
 - [ ] **T-026** *(depois de T-025b)* Bootstrap Nest: `main.ts`, `AppModule` com módulos por papel, flags `ENABLE_*`, `enableShutdownHooks` (esqueleto). Teste: smoke de boot em integração (cada combinação de flags sobe e para). *(ADR-0003, 02-design §1 e §8)*
 
 ## M3 — Casos de uso e HTTP (Dia 2, manhã)

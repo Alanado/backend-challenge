@@ -4,6 +4,7 @@ import {
 	InfrastructureUnavailableError,
 	TransientPersistenceError,
 } from "../../src/modules/platform/application/persistence-errors";
+import { assertCreatedWalletsConsistent } from "../support/assertLedgerInvariant";
 import { openWalletWithOpening } from "../support/domain-builders";
 import { createPersistence, type Persistence } from "../support/persistence";
 import { connect, failureOf, UNIQUE_VIOLATION } from "../support/sql";
@@ -256,5 +257,12 @@ describe("X-20 TransactionManager translates database failures (PostgreSQL real)
 		expect(inside).toBe("200ms");
 		const outside = await shortLock.tm.current().execute("show lock_timeout");
 		expect((outside[0] as { lock_timeout: string }).lock_timeout).toBe("0");
+	});
+});
+
+describe("TST-I-14 invariant over what this suite created", () => {
+	test("TST-I-14 every wallet created by the transaction manager tests still satisfies the ledger invariant", async () => {
+		expect(p.created.length).toBeGreaterThan(5);
+		await assertCreatedWalletsConsistent(p.ledgerIntegrity, p.created);
 	});
 });

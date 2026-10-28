@@ -11,6 +11,7 @@ import {
 import { MikroWagerTransactionRepository } from "../../src/modules/wagering/infrastructure/mikro-wager-transaction.repository";
 import { WagerTransactionSchema } from "../../src/modules/wagering/infrastructure/wager-transaction.schema";
 import { LedgerEntrySchema } from "../../src/modules/wallet/infrastructure/ledger-entry.schema";
+import { LedgerIntegrityReader } from "../../src/modules/wallet/infrastructure/ledger-integrity.reader";
 import { MikroLedgerRepository } from "../../src/modules/wallet/infrastructure/mikro-ledger.repository";
 import { MikroWalletRepository } from "../../src/modules/wallet/infrastructure/mikro-wallet.repository";
 import { WalletSchema } from "../../src/modules/wallet/infrastructure/wallet.schema";
@@ -58,6 +59,9 @@ export async function createPersistence(
 		ledger: new MikroLedgerRepository(tm),
 		inbox: new MikroInboxRepository(tm),
 		outbox: new MikroOutboxRepository(tm),
+		ledgerIntegrity: new LedgerIntegrityReader(tm),
+		/** Wallets created through the builders; `assertAllCreatedWalletsConsistent` checks them at the end. */
+		created: [] as string[],
 		close: () => orm.close(true),
 	};
 }
