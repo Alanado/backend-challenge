@@ -59,7 +59,7 @@ Resultados do spike: ver [adr/0002-spike.md](adr/0002-spike.md).
 - [x] **T-043** Worker de `PENDING_REFERENCE` (ordem wallet→linha, revalidação, acordar dependentes). *(RF-REF-*; TST-I-10, C-07)*
 - [x] **T-044** Circuit breaker de infraestrutura. *(RF-MSG-07; TST-I-20)*
 - [x] **T-045** Seam de falha (`TEST_FAULT`) com recusa em produção. *(03-messaging §9)*
-- [ ] **T-046** Testes multi-processo: C-04, C-05, C-08, C-10 + `Bun.spawn` de instâncias.
+- [x] **T-046** Testes multi-processo: C-04, C-05, C-08, C-10 + `Bun.spawn` de instâncias.
 
 ## M5 — Observabilidade e falhas (Dia 3, manhã)
 
