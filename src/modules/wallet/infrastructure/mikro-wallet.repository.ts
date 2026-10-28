@@ -1,6 +1,7 @@
 import { LockMode } from "@mikro-orm/core";
 import { Injectable } from "@nestjs/common";
 import { MikroTransactionManager } from "../../platform/infrastructure/mikro-transaction-manager";
+import { WalletAlreadyExistsError } from "../application/errors";
 import {
 	VersionAssertionError,
 	WalletRepository,
@@ -8,6 +9,25 @@ import {
 import type { Wallet } from "../domain/wallet";
 import { walletToDomain, walletToRow } from "./wallet.mapper";
 import { WalletRow } from "./wallet.schema";
+
+const WALLET_PLAYER_CURRENCY_UK = "wallets_player_currency_uk";
+
+function isUniqueViolation(error: unknown, constraint: string): boolean {
+	let current: unknown = error;
+	for (
+		let depth = 0;
+		depth < 5 && current !== undefined && current !== null;
+		depth++
+	) {
+		const { code, constraint: name } = current as {
+			code?: unknown;
+			constraint?: unknown;
+		};
+		if (code === "23505" && name === constraint) return true;
+		current = (current as { cause?: unknown }).cause;
+	}
+	return false;
+}
 
 @Injectable()
 export class MikroWalletRepository extends WalletRepository {
@@ -44,7 +64,15 @@ export class MikroWalletRepository extends WalletRepository {
 	}
 
 	async insert(wallet: Wallet): Promise<void> {
-		await this.tm.current().insert(WalletRow, walletToRow(wallet));
+		try {
+			await this.tm.current().insert(WalletRow, walletToRow(wallet));
+		} catch (error) {
+			// 23505 on the (player, currency) UNIQUE is the only source of truth for duplicates (RF-WAL-01).
+			if (isUniqueViolation(error, WALLET_PLAYER_CURRENCY_UK)) {
+				throw new WalletAlreadyExistsError();
+			}
+			throw error;
+		}
 	}
 
 	async updateBalance(wallet: Wallet, expectedVersion: number): Promise<void> {

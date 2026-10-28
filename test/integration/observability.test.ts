@@ -100,3 +100,40 @@ describe("TST-I-17 logs carry the required fields (HTTP, real process)", () => {
 		}
 	});
 });
+
+describe("TST-I-17 / gate: a wallet flow leaves ids but no sensitive values in the logs", () => {
+	test("TST-I-17 the request log carries walletId, and stdout holds no playerId or balance", async () => {
+		const playerId = Bun.randomUUIDv7();
+		const response = await fetch(`${base}/wallets`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"X-Correlation-Id": "corr-wallet-flow",
+			},
+			body: JSON.stringify({
+				playerId,
+				initialBalance: { amount: "4242.42", currency: "BRL" },
+			}),
+		});
+		const created = (await response.json()) as { id: string };
+		expect(response.status).toBe(201);
+		await fetch(`${base}/wallets/${created.id}`, {
+			headers: { "X-Correlation-Id": "corr-wallet-flow-get" },
+		});
+		await fetch(`${base}/wallets`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				playerId,
+				initialBalance: { amount: "4242.42", currency: "BRL" },
+			}),
+		});
+
+		const line = await waitForAccessLog("corr-wallet-flow");
+		await waitForAccessLog("corr-wallet-flow-get");
+		expect(line).toMatchObject({ walletId: created.id, status: 201 });
+		const out = app.stdout() + app.stderr();
+		expect(out).not.toContain(playerId);
+		expect(out).not.toContain("4242.42");
+	});
+});

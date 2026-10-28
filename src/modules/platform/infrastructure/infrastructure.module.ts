@@ -2,7 +2,9 @@ import { MikroOrmModule } from "@mikro-orm/nestjs";
 import { PostgreSqlDriver } from "@mikro-orm/postgresql";
 import { type DynamicModule, Module } from "@nestjs/common";
 import { LoggerModule } from "nestjs-pino";
+import { SystemClock } from "../../../shared/clock";
 import type { AppConfig } from "../../../shared/config";
+import { Uuidv7Generator } from "../../../shared/ids";
 import { InboxRepository } from "../../messaging/application/inbox-repository";
 import { OutboxRepository } from "../../messaging/application/outbox-repository";
 import { InboxMessageSchema } from "../../messaging/infrastructure/inbox-message.schema";
@@ -27,7 +29,7 @@ import { MikroTransactionManager } from "./mikro-transaction-manager";
 import { NoopProviderIdentity } from "./noop-provider-identity";
 import { createPinoLogger, PinoAppLogger } from "./pino-logger";
 import { PromMetrics } from "./prom-metrics";
-import { APP_CONFIG } from "./tokens";
+import { APP_CONFIG, CLOCK, ID_GENERATOR } from "./tokens";
 import { TransactionRunner, TransactionTimeouts } from "./transaction-runner";
 
 @Module({})
@@ -60,6 +62,8 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 		],
 		providers: [
 			{ provide: APP_CONFIG, useValue: config },
+			{ provide: CLOCK, useValue: new SystemClock() },
+			{ provide: ID_GENERATOR, useValue: new Uuidv7Generator() },
 			{ provide: AppLogger, useValue: new PinoAppLogger(pinoLogger) },
 			{
 				provide: TransactionTimeouts,
@@ -92,6 +96,8 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 		],
 		exports: [
 			APP_CONFIG,
+			CLOCK,
+			ID_GENERATOR,
 			AppLogger,
 			MetricsPort,
 			PromMetrics,

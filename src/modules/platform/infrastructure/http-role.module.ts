@@ -4,11 +4,13 @@ import {
 	Module,
 	type NestModule,
 } from "@nestjs/common";
-import { APP_GUARD } from "@nestjs/core";
+import { APP_FILTER, APP_GUARD } from "@nestjs/core";
+import { WalletHttpModule } from "../../wallet/infrastructure/wallet-http.module";
 import { ActiveRoles } from "./active-roles";
 import { AuthGuard } from "./auth.guard";
 import { CorrelationIdMiddleware } from "./correlation-id.middleware";
 import { MetricsController } from "./metrics.controller";
+import { ProblemDetailsFilter } from "./problem-details.filter";
 import { RoleLifecycle } from "./role-lifecycle";
 
 @Injectable()
@@ -22,11 +24,13 @@ export class HttpRole extends RoleLifecycle {
 
 /** ENABLE_HTTP. Controllers (health, metrics, wagering, wallet) join `controllers` from W5 on. */
 @Module({
+	imports: [WalletHttpModule],
 	controllers: [MetricsController],
 	providers: [
 		HttpRole,
 		CorrelationIdMiddleware,
 		{ provide: APP_GUARD, useClass: AuthGuard },
+		{ provide: APP_FILTER, useClass: ProblemDetailsFilter },
 	],
 })
 export class HttpRoleModule implements NestModule {

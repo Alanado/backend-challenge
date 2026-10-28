@@ -6,6 +6,7 @@ import { TransactionRequiredError } from "../../src/modules/platform/application
 import { FailureCode } from "../../src/modules/wagering/domain/failure-code";
 import { WagerTransactionKind } from "../../src/modules/wagering/domain/wager-transaction-kind";
 import { WagerTransactionStatus } from "../../src/modules/wagering/domain/wager-transaction-status";
+import { WalletAlreadyExistsError } from "../../src/modules/wallet/application/errors";
 import { VersionAssertionError } from "../../src/modules/wallet/application/wallet-repository";
 import { LedgerDirection } from "../../src/modules/wallet/domain/wallet-ledger-entry";
 import { assertCreatedWalletsConsistent } from "../support/assertLedgerInvariant";
@@ -17,7 +18,7 @@ import {
 } from "../support/domain-builders";
 import { uniqueId } from "../support/ids";
 import { createPersistence, type Persistence } from "../support/persistence";
-import { connect, failureOf, UNIQUE_VIOLATION } from "../support/sql";
+import { connect, failureOf } from "../support/sql";
 import {
 	createSuiteDatabase,
 	type SuiteDatabase,
@@ -78,12 +79,14 @@ describe("X-10 wallet repository round trip (PostgreSQL real)", () => {
 		expect(await p.wallets.findById(uniqueId())).toBeUndefined();
 	});
 
-	test("X-10 a second wallet for the same player and currency violates the UNIQUE (TST-I-02 in practice)", async () => {
+	test("X-10 a second wallet for the same player and currency is refused by the UNIQUE and surfaces as WalletAlreadyExistsError (T-030)", async () => {
 		const wallet = await openWalletWithOpening(p, "5.00");
 		const twin = newWallet("1.00", new Date(), wallet.playerId);
-		const failure = await failureOf(p.wallets.insert(twin));
-		expect(failure.code).toBe(UNIQUE_VIOLATION);
-		expect(failure.constraint).toBe("wallets_player_currency_uk");
+		await expect(p.wallets.insert(twin)).rejects.toBeInstanceOf(
+			WalletAlreadyExistsError,
+		);
+		// The constraint itself (23505 on wallets_player_currency_uk) is proven straight on SQL in TST-I-02.
+		expect(await p.wallets.findById(twin.id)).toBeUndefined();
 	});
 });
 

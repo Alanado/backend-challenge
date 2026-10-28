@@ -94,6 +94,31 @@ describe("TST-U-12 log redaction", () => {
 		expect(line.walletId).toBe("w-err");
 	});
 
+	test("TST-U-12 driver messages lose their DETAIL and any id or amount quoted in the text", () => {
+		const { logger, text } = capture();
+		const ormStyle = new Error(
+			`duplicate key value violates unique constraint "wallets_player_currency_uk"\n - detail: Key (player_id, currency)=(${SECRETS.playerId}, BRL) already exists.`,
+		);
+		const pgStyle = new Error(
+			`insert failed DETAIL: Failing row contains (0192f298-345e-7e38-af88-e43f851a819d, ${SECRETS.amount}).`,
+		);
+		const loose = new Error(
+			"balance 0192f298-345e-7e38-af88-e43f851a819d went to 123456.78 for player",
+		);
+		logger.error(
+			{ err: ormStyle, other: { cause: pgStyle }, list: [loose] },
+			"driver",
+		);
+
+		const out = text();
+		expect(out).not.toContain(SECRETS.playerId);
+		expect(out).not.toContain(SECRETS.amount);
+		expect(out).not.toContain("0192f298-345e-7e38-af88-e43f851a819d");
+		expect(out).not.toContain("123456.78");
+		// What stays useful for diagnosis: the constraint name.
+		expect(out).toContain("wallets_player_currency_uk");
+	});
+
 	test("TST-U-12 output is one JSON object per line with the allowed fields intact", () => {
 		const { logger, lines } = capture();
 		const fields: LogFields = {

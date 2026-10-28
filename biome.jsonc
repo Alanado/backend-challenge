@@ -29,6 +29,9 @@
 		}
 	},
 	"javascript": {
+		// Nest controllers use parameter decorators (@Body, @Param); without this Biome fails to parse them
+		// (aprovado pelo autor na W5). Nenhuma regra de lint foi desligada.
+		"parser": { "unsafeParameterDecoratorsEnabled": true },
 		"formatter": {
 			"quoteStyle": "double"
 		}

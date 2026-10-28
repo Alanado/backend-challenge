@@ -49,6 +49,20 @@ const REDACT_PATHS = [
 	"*.roundId",
 ];
 
+// Driver messages quote row values: MikroORM appends "\n - detail: Key (...)=(...)", PostgreSQL
+// itself says "DETAIL: ...". Cut those off, then mask any uuid or 2-decimal amount left in the text.
+const DETAIL_TAIL = /(?:\n\s*-\s*detail:|\bDETAIL:)[\s\S]*/i;
+const UUID_TEXT =
+	/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const AMOUNT_TEXT = /\b\d+\.\d{2}\b/g;
+
+function sanitizeText(text: string): string {
+	return text
+		.replace(DETAIL_TAIL, "")
+		.replace(UUID_TEXT, "[id]")
+		.replace(AMOUNT_TEXT, "[amount]");
+}
+
 /**
  * Deep copy without forbidden keys. Errors are reduced to type, message and stack: driver errors
  * carry `detail`/`parameters` with row values. (pino runs `formatters.log` before serializers,
@@ -56,7 +70,11 @@ const REDACT_PATHS = [
  */
 function scrub(value: unknown, depth: number): unknown {
 	if (value instanceof Error) {
-		return { type: value.name, message: value.message, stack: value.stack };
+		return {
+			type: value.name,
+			message: sanitizeText(value.message),
+			stack: value.stack === undefined ? undefined : sanitizeText(value.stack),
+		};
 	}
 	if (value === null || typeof value !== "object") return value;
 	if (depth >= MAX_DEPTH) return TRUNCATED;
