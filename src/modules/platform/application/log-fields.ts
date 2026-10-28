@@ -15,6 +15,10 @@ export interface LogFields {
 	errorCode?: string;
 	durationMs?: number;
 	channel?: string;
+	/** Why a reconciliation diverged (a short code, never a value). */
+	reason?: string;
+	/** `wallet_version` where a ledger chain breaks (a position, not an amount). */
+	firstBreakAtVersion?: number;
 }
 
 /** Port used by application code; the adapter (pino) lives in infrastructure. */

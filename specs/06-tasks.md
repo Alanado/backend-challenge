@@ -47,7 +47,7 @@ Resultados do spike: ver [adr/0002-spike.md](adr/0002-spike.md).
 - [x] **T-032** Reversões e validação de referência (`REFUND`, `ROLLBACK`, `PENDING_REFERENCE` na entrada). *(RF-TXN-06..09/11/13; TST-I-08, I-09)*
 - [x] **T-033** Controllers, Zod, problem+json, mapeamento de status, `X-Correlation-Id`. *(RF-API-*)*
 - [x] **T-034** Consultas: transação por id e por (provider, external id); ledger paginado. *(RF-LED-04; TST-I-15)*
-- [ ] **T-035** Reconciliação (snapshot, cadeia). *(RF-REC-*; TST-I-14)*
+- [x] **T-035** Reconciliação (snapshot, cadeia). *(RF-REC-*; TST-I-14)*
 - [ ] **T-036** Testes de concorrência da fase: C-01, C-02, C-03, C-09, C-11, C-12. *(RF-CON-*)*
 
 ## M4 — Mensageria e multi-instância (Dia 2, tarde)

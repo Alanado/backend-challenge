@@ -15,6 +15,10 @@ import {
 	ListWalletLedger,
 } from "../application/list-wallet-ledger";
 import {
+	ReconcileWallet,
+	type ReconciliationView,
+} from "../application/reconcile-wallet";
+import {
 	parseCreateWallet,
 	parseLedgerQuery,
 	parseWalletId,
@@ -26,6 +30,7 @@ export class WalletController {
 		private readonly createWallet: CreateWallet,
 		private readonly getWallet: GetWallet,
 		private readonly listLedger: ListWalletLedger,
+		private readonly reconcileWallet: ReconcileWallet,
 	) {}
 
 	@Post()
@@ -55,5 +60,14 @@ export class WalletController {
 		const id = parseWalletId(walletId);
 		LogContext.setWalletId(id);
 		return this.listLedger.execute(id, parseLedgerQuery(query));
+	}
+
+	/** Always 200: a divergence is the answer (`consistent: false`), not an error. */
+	@Post(":walletId/reconciliation")
+	@HttpCode(200)
+	reconcile(@Param("walletId") walletId: string): Promise<ReconciliationView> {
+		const id = parseWalletId(walletId);
+		LogContext.setWalletId(id);
+		return this.reconcileWallet.execute(id);
 	}
 }

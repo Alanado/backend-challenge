@@ -2,13 +2,17 @@ import { Module } from "@nestjs/common";
 import type { Clock } from "../../../shared/clock";
 import type { IdGenerator } from "../../../shared/ids";
 import { OutboxRepository } from "../../messaging/application/outbox-repository";
+import { AppLogger } from "../../platform/application/log-fields";
+import { MetricsPort } from "../../platform/application/metrics";
 import { TransactionManager } from "../../platform/application/transaction-manager";
 import { CLOCK, ID_GENERATOR } from "../../platform/infrastructure/tokens";
 import { WagerTransactionRepository } from "../../wagering/application/wager-transaction-repository";
 import { CreateWallet } from "../application/create-wallet";
 import { GetWallet } from "../application/get-wallet";
+import { LedgerIntegrityRead } from "../application/ledger-integrity";
 import { LedgerRepository } from "../application/ledger-repository";
 import { ListWalletLedger } from "../application/list-wallet-ledger";
+import { ReconcileWallet } from "../application/reconcile-wallet";
 import { WalletRepository } from "../application/wallet-repository";
 import { WalletController } from "./wallet.controller";
 
@@ -42,6 +46,15 @@ import { WalletController } from "./wallet.controller";
 			provide: GetWallet,
 			useFactory: (wallets: WalletRepository) => new GetWallet(wallets),
 			inject: [WalletRepository],
+		},
+		{
+			provide: ReconcileWallet,
+			useFactory: (
+				reader: LedgerIntegrityRead,
+				metrics: MetricsPort,
+				logger: AppLogger,
+			) => new ReconcileWallet(reader, metrics, logger),
+			inject: [LedgerIntegrityRead, MetricsPort, AppLogger],
 		},
 		{
 			provide: ListWalletLedger,

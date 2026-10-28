@@ -14,9 +14,11 @@ import { OutboxMessageSchema } from "../../messaging/infrastructure/outbox-messa
 import { WagerTransactionRepository } from "../../wagering/application/wager-transaction-repository";
 import { MikroWagerTransactionRepository } from "../../wagering/infrastructure/mikro-wager-transaction.repository";
 import { WagerTransactionSchema } from "../../wagering/infrastructure/wager-transaction.schema";
+import { LedgerIntegrityRead } from "../../wallet/application/ledger-integrity";
 import { LedgerRepository } from "../../wallet/application/ledger-repository";
 import { WalletRepository } from "../../wallet/application/wallet-repository";
 import { LedgerEntrySchema } from "../../wallet/infrastructure/ledger-entry.schema";
+import { LedgerIntegrityReader } from "../../wallet/infrastructure/ledger-integrity.reader";
 import { MikroLedgerRepository } from "../../wallet/infrastructure/mikro-ledger.repository";
 import { MikroWalletRepository } from "../../wallet/infrastructure/mikro-wallet.repository";
 import { WalletSchema } from "../../wallet/infrastructure/wallet.schema";
@@ -83,6 +85,7 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 			MikroWagerTransactionRepository,
 			MikroInboxRepository,
 			MikroOutboxRepository,
+			LedgerIntegrityReader,
 			// Application ports resolve to the MikroORM adapters.
 			{ provide: TransactionManager, useExisting: MikroTransactionManager },
 			{ provide: WalletRepository, useExisting: MikroWalletRepository },
@@ -93,6 +96,7 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 			},
 			{ provide: InboxRepository, useExisting: MikroInboxRepository },
 			{ provide: OutboxRepository, useExisting: MikroOutboxRepository },
+			{ provide: LedgerIntegrityRead, useExisting: LedgerIntegrityReader },
 		],
 		exports: [
 			APP_CONFIG,
@@ -110,6 +114,7 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 			WagerTransactionRepository,
 			InboxRepository,
 			OutboxRepository,
+			LedgerIntegrityRead,
 		],
 	};
 }
