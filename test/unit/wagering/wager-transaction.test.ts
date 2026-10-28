@@ -197,6 +197,13 @@ describe("TST-U-04 WagerTransaction state machine", () => {
 		expect(tx.referenceAttempts).toBe(0);
 	});
 
+	test("TST-U-04 markPendingReference records the balance observed under the lock", () => {
+		const tx = create(Kind.Refund, "ext-bet");
+		tx.markPendingReference(t1, brl("100.00"));
+		expect(tx.observedBalance?.toString()).toBe("100.00");
+		expect(tx.referenceAttempts).toBe(0);
+	});
+
 	test("TST-U-04 a retry that stays pending is not a transition: counts and reschedules", () => {
 		const tx = inStatus(Status.PendingReference, Kind.Refund);
 		tx.rescheduleReference(t2);

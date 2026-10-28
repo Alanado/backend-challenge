@@ -9,6 +9,7 @@ import {
 	SubmitWagerTransaction,
 	type SubmitWagerTransactionCommand,
 } from "../../src/modules/wagering/application/submit-wager-transaction";
+import type { ReferenceBackoffConfig } from "../../src/modules/wagering/domain/reference-backoff";
 import { WagerTransactionKind } from "../../src/modules/wagering/domain/wager-transaction-kind";
 import type { Clock } from "../../src/shared/clock";
 import {
@@ -104,7 +105,18 @@ export interface HarnessOptions {
 	fault?: string;
 	faults?: FaultInjector;
 	clock?: SteppingClock;
+	backoff?: ReferenceBackoffConfig;
+	random?: () => number;
 }
+
+/** Defaults of ADR-0013; with `random` fixed at 0.5 the first delay is 3.75 s. */
+export const DEFAULT_BACKOFF: ReferenceBackoffConfig = {
+	maxAttempts: 6,
+	baseMs: 5000,
+	factor: 2,
+	capMs: 300_000,
+};
+export const FIRST_PENDING_DELAY_MS = 3750;
 
 /** The use case on the real adapters of `p`, with a hand-driven clock and recording doubles. */
 export function createSubmitHarness(
@@ -125,6 +137,8 @@ export function createSubmitHarness(
 		metrics,
 		logger,
 		faults: options.faults ?? createFaultInjector(options.fault ?? ""),
+		referenceBackoff: options.backoff ?? DEFAULT_BACKOFF,
+		random: options.random ?? (() => 0.5),
 	});
 	return { submit, clock, metrics, logger };
 }

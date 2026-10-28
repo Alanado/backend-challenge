@@ -3,6 +3,7 @@ import type { FaultInjector } from "../../../shared/fault-injector";
 import type { IdGenerator } from "../../../shared/ids";
 import { Money, type MoneyProps } from "../../../shared/money";
 import type { OutboxRepository } from "../../messaging/application/outbox-repository";
+import { WagerTransactionPendingReference } from "../../messaging/domain/events/wager-transaction-pending-reference";
 import { WagerTransactionProcessed } from "../../messaging/domain/events/wager-transaction-processed";
 import { WagerTransactionRejected } from "../../messaging/domain/events/wager-transaction-rejected";
 import { WalletBalanceChanged } from "../../messaging/domain/events/wallet-balance-changed";
@@ -28,13 +29,17 @@ import {
 import type { FailureCode } from "../domain/failure-code";
 import { payloadHash } from "../domain/payload-hash";
 import {
+	type ReferenceBackoffConfig,
+	referenceBackoff,
+} from "../domain/reference-backoff";
+import {
 	decideTransaction,
 	type ReferenceFacts,
 	type TransactionDecision,
 } from "../domain/transaction-policy";
 import { WagerTransaction } from "../domain/wager-transaction";
 import { WagerTransactionKind } from "../domain/wager-transaction-kind";
-import type { WagerTransactionStatus } from "../domain/wager-transaction-status";
+import { WagerTransactionStatus } from "../domain/wager-transaction-status";
 import {
 	ExternalTransactionIdConflictError,
 	IdempotencyKeyPayloadMismatchError,
@@ -81,14 +86,9 @@ export interface SubmitWagerTransactionDeps {
 	metrics: MetricsPort;
 	logger: AppLogger;
 	faults: FaultInjector;
-}
-
-/** Placeholder of T-031a: reference resolution is T-032. A reference is never silently ignored. */
-export class ReferenceResolutionNotImplementedYet extends Error {
-	constructor() {
-		super("reference resolution is not implemented yet");
-		this.name = "ReferenceResolutionNotImplementedYet";
-	}
+	referenceBackoff: ReferenceBackoffConfig;
+	/** `[0, 1)`; defaults to `Math.random`. Injectable for deterministic schedules. */
+	random?: () => number;
 }
 
 export function toResult(
@@ -275,13 +275,26 @@ export class SubmitWagerTransaction {
 		return toResult(stored, true);
 	}
 
+	/**
+	 * Looks the reference up by (provider, external id) with NO wallet filter (ADR-0013), after the
+	 * wallet lock: reversals on this wallet are serialized, so "already reversed" cannot go stale.
+	 */
 	private async resolveReference(
 		transaction: WagerTransaction,
 	): Promise<ReferenceFacts | undefined> {
-		if (transaction.referenceExternalTransactionId !== undefined) {
-			throw new ReferenceResolutionNotImplementedYet();
-		}
-		return undefined;
+		const externalId = transaction.referenceExternalTransactionId;
+		if (externalId === undefined) return undefined;
+		const { transactions } = this.deps;
+		const referenced = await transactions.findByExternalId(
+			transaction.providerId,
+			externalId,
+		);
+		if (referenced === undefined) return undefined;
+		// The partial unique index (ADR-0010) is the safety net behind this check.
+		const alreadyReversed =
+			referenced.status === WagerTransactionStatus.Processed &&
+			(await transactions.existsProcessedReversalOf(referenced.id));
+		return { transaction: referenced, alreadyReversed };
 	}
 
 	private async conclude(
@@ -307,7 +320,19 @@ export class SubmitWagerTransaction {
 				break;
 			}
 			case "PENDING_REFERENCE": {
-				throw new ReferenceResolutionNotImplementedYet();
+				const delayMs = referenceBackoff(
+					0,
+					this.deps.referenceBackoff,
+					this.deps.random,
+				);
+				transaction.markPendingReference(
+					new Date(now.getTime() + delayMs),
+					wallet.balance,
+				);
+				events.push(
+					WagerTransactionPendingReference.from(transaction, eventContext()),
+				);
+				break;
 			}
 			case "APPLY": {
 				const entry = await this.moveBalance(
@@ -332,6 +357,15 @@ export class SubmitWagerTransaction {
 		}
 
 		await transactions.update(transaction, now);
+		if (transaction.status === WagerTransactionStatus.Processed) {
+			// Same transaction, restricted to the locked wallet (ADR-0007): the pending ones may retry now.
+			await transactions.wakeDependents(
+				transaction.providerId,
+				transaction.externalTransactionId,
+				wallet.id,
+				now,
+			);
+		}
 		for (const event of events) {
 			await outbox.enqueue(OutboxMessage.enqueue(event, wallet.id));
 		}

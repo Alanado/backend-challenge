@@ -351,28 +351,6 @@ describe("TST-I-06 SubmitWagerTransaction pipeline (use case, real PostgreSQL)",
 		).toHaveLength(0);
 		await assertLedgerInvariant(p.ledgerIntegrity, wallet.id);
 	});
-
-	test("TST-I-06 a command carrying a reference is refused loudly, never ignored", async () => {
-		const wallet = await openWalletWithOpening(p, "100.00");
-		const command = bet(wallet.id, wallet.playerId, {
-			kind: WagerTransactionKind.Refund,
-			referenceExternalTransactionId: "some-bet",
-		});
-
-		await expect(
-			h.submit.execute(command, SUBMIT_CONTEXT),
-		).rejects.toMatchObject({
-			name: "ReferenceResolutionNotImplementedYet",
-		});
-
-		expect(
-			await rows(
-				"select 1 from wager_transactions where external_transaction_id = $1",
-				[command.externalTransactionId],
-			),
-		).toHaveLength(0);
-		await assertLedgerInvariant(p.ledgerIntegrity, wallet.id);
-	});
 });
 
 describe("TST-I-05 atomicity with TEST_FAULT=fail-mid-transaction (use case)", () => {

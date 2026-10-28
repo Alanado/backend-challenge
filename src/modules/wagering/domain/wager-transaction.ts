@@ -188,8 +188,11 @@ export class WagerTransaction {
 		this.state.nextAttemptAt = undefined;
 	}
 
-	/** First entry into PENDING_REFERENCE; the first attempt is not counted. */
-	markPendingReference(nextAttemptAt: Date): void {
+	/**
+	 * First entry into PENDING_REFERENCE; the first attempt is not counted.
+	 * `observedBalance` is the wallet balance under the lock (replays return it).
+	 */
+	markPendingReference(nextAttemptAt: Date, observedBalance?: Money): void {
 		if (this.state.status !== Pending) {
 			throw new InvalidTransactionStateError(
 				this.state.status,
@@ -198,6 +201,7 @@ export class WagerTransaction {
 		}
 		this.state.status = PendingReference;
 		this.state.nextAttemptAt = nextAttemptAt;
+		this.state.observedBalance = observedBalance;
 	}
 
 	/**
