@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { checkLinks } from "./lib/architecture-check";
 import {
 	candidateSection,
 	extractBunRunTargets,
@@ -16,11 +17,17 @@ const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
 	scripts?: Record<string, string>;
 };
 
-const targets = extractBunRunTargets(candidateSection(readme));
+const candidate = candidateSection(readme);
+const targets = extractBunRunTargets(candidate);
 const invalid = findInvalidTargets(targets, pkg.scripts ?? {}, (path) =>
 	existsSync(join(root, path)),
 );
 const missing = findMissingRequired(targets, REQUIRED_COMMANDS);
+// Links relativos da seção do candidato (arquivos e âncoras do ARCHITECTURE.md): mesma conferência.
+const brokenLinks = checkLinks(candidate, root, {
+	fileExists: existsSync,
+	readFile: (path) => readFileSync(path, "utf8"),
+});
 
 for (const target of targets) {
 	console.log(
@@ -30,9 +37,10 @@ for (const target of targets) {
 for (const command of missing) {
 	console.log(`FAIL required command not in the README: bun run ${command}`);
 }
-if (invalid.length > 0 || missing.length > 0) {
+for (const problem of brokenLinks) console.log(`FAIL README ${problem}`);
+if (invalid.length > 0 || missing.length > 0 || brokenLinks.length > 0) {
 	console.error(
-		`check-readme-commands FAILED: ${invalid.length} unknown target(s), ${missing.length} required command(s) missing`,
+		`check-readme-commands FAILED: ${invalid.length} unknown target(s), ${missing.length} required command(s) missing, ${brokenLinks.length} broken link(s)`,
 	);
 	process.exit(1);
 }

@@ -399,7 +399,7 @@ Nunca `walletId`, `playerId` ou `transactionId` como label (cardinalidade).
 | Ordem de locks                        | `X-LOCK-ORDER`, `TST-C-07`, `C-09`, `C-10`                   | `INSERT` antes do lock da wallet (W6); linha antes da wallet no worker (W8)             |
 | Sem lock global                       | `TST-C-03`                                                   | `pg_advisory_xact_lock` fixo em toda transação (W7)                                     |
 
-Verificações automáticas da documentação: [`scripts/check-readme-commands.ts`](scripts/check-readme-commands.ts) e [`scripts/check-architecture.ts`](scripts/check-architecture.ts).
+Verificações automáticas da documentação: [`scripts/check-readme-commands.ts`](scripts/check-readme-commands.ts), [`scripts/check-architecture.ts`](scripts/check-architecture.ts) e [`scripts/check-traceability.ts`](scripts/check-traceability.ts); esta última falha se um requisito com teste ficar sem teste, se um `TST-*` do plano não existir nos títulos ou se uma tarefa ficar aberta, e regenera a matriz requisito → tarefa → teste em [specs/traceability.md](specs/traceability.md).
 
 ## 14. Limitações assumidas
 

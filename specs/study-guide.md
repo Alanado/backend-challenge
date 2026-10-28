@@ -146,3 +146,34 @@ Formato: **decisão → por quê → o que foi descartado → pergunta provável
 - [ ] Sei as limitações da seção 5.
 - [ ] Rodei a suíte inteira 3× e `docker compose up` do zero.
 - [ ] Revisei o que mudou na implementação em relação às specs (T-062).
+
+## 8. O que mudou na implementação em relação ao desenho (T-062)
+
+Fonte: as seções "Desvios" dos [relatórios das ondas](waves/reports/). Nenhum ADR nem spec numerada foi alterado; onde o código difere do texto, a diferença está aqui e no [ARCHITECTURE.md](../ARCHITECTURE.md). Saiba dizer "o desenho dizia X, o código faz Y, e por quê".
+
+| Tema | O desenho dizia | O código faz | Por quê / onde |
+|---|---|---|---|
+| Snapshot da reconciliação | [04-api §5](04-api.md): transação `REPEATABLE READ READ ONLY` | **Uma única instrução SQL** (snapshot único mesmo em `READ COMMITTED`, sem locks) | ADR-0016 admite as duas formas; reuso do reader da T-025b (W4, W7) |
+| Shutdown | `enableShutdownHooks()` do Nest | Handler próprio de `SIGTERM`/`SIGINT` em `main.ts` | Sob Bun o hook do Nest reenvia o sinal e o processo sai com **143**, não 0 (W4) |
+| Variável nova | — | `SHUTDOWN_DRAIN_DELAY_MS` (padrão 0; Compose 2000) | No `SIGTERM` o listener fechava na hora e o 503 da readiness ficava invisível; o autor aprovou (W10) |
+| Pool de conexões | — | `pg-pool-reaper.ts`: libera clientes mortos presos no pool | Bug do MikroORM 7.2.5/Kysely (o `ROLLBACK` falha e o cliente não volta); decisão do autor, **remover quando o upstream corrigir** (W4) |
+| `FAILED` com lock preso | Exaustão com o lock mantido grava `FAILED` | Sem lock livre não há `FAILED`: a mensagem vai à DLQ com `PROCESSING_ATTEMPTS_EXHAUSTED` | A gravação precisa do mesmo `FOR UPDATE` (ordem canônica); coerente com "sem banco, a DLQ é a verdade" (W9) |
+| Falha de rede do SQS e o breaker | [03-messaging §3.2](03-messaging.md) lista "timeout de rede do SQS" como infraestrutura que aciona o breaker | `classifyMessageError` classifica assim (U-11), mas o breaker só abre por falha **do banco** vista pelo handler; falha de rede do SQS pausa o `receive` por 1 s | O breaker testa o banco com `SELECT 1` (W9 #7). **Divergência de texto: pergunta ao autor** |
+| Ordem na reentrega | Seguintes do grupo voltam com visibilidade 0 e a ordem é preservada | No LocalStack elas voltam **antes** da mensagem que falhou | Ordem é otimização, o banco garante o resto (W9, pergunta A) |
+| Erros "da mensagem" | Lista do 03-messaging §3.2 | Erro desconhecido é transitório (limitado por `SQS_MAX_RECEIVE`); `IdempotencyKeyPayloadMismatch` e `ExternalTransactionIdConflict` são permanentes | Nunca descartar em silêncio; um 409 não se resolve por retry (W9) |
+| Backoff de referências | "6 tentativas" | O worker faz exatamente `PENDING_REF_MAX_ATTEMPTS` retentativas; a primeira entrada em `PENDING_REFERENCE` não conta tentativa | Atrasos 5, 10, 20, 40, 80, 160 s como no ADR-0013 (W2, W8) |
+| `outbox_lag_seconds` | Idade do evento "publicável" mais antigo | Idade do mais antigo **não publicado e não falho**, inclusive os em backoff | Uma linha em backoff continua atrasando o evento (W8) |
+| `wager_transactions_total` | Todo desfecho | **Não conta** o desfecho de pendência resolvida ou rejeitada pelo worker | O label `channel` só admite `http\|sqs`; contar mudaria o contrato do 04-api §7 (W8) |
+| `REFERENCE_ALREADY_REVERSED` | Passo 2 do design §5 | Vale para **qualquer** comando com referência, inclusive `WIN`/`LOSS` que apontam para uma `BET` já revertida | O design não restringe a reversões; sem teste dedicado. **Aguarda confirmação do autor** (W2, W6, W7) |
+| Assinaturas do domínio | `debit(money, …)` do enunciado | `Wallet.debit/credit(money, transactionId, now, entryId)`; `markProcessed(refId, at, observedBalance?)`; `markPendingReference(nextAttemptAt, observedBalance?)`; `OutboxMessage.enqueue(event, groupKey)` | Ids e relógio entram por parâmetro (domínio sem I/O) (W2, W6) |
+| Config | Tabela do 02-design §8 | Acrescentou `NODE_ENV`, `PORT`, `LOG_LEVEL`, `DATABASE_URL`, `SQS_*` (endpoint, região, credenciais fictícias, nomes e URLs de fila), `SQS_WAIT_TIME_S` | Necessárias para subir; todas com padrão e validadas por Zod (W3, W9) |
+| Logs | Campos do 04-api §8 | Tipo `LogFields` fechado, scrub profundo além do `redact`, limpeza das mensagens de erro do ORM; campos extras `eventId`, `reason`, `firstBreakAtVersion` | O pino aplica `formatters.log` antes dos serializers e o `redact` não é recursivo (W5, W7, W8) |
+| Métricas padrão do Node | Não especificado | Desligadas; registro próprio por instância | Sob Bun só `process_*`/heap são confiáveis (spike, W5) |
+| `GET` de transação | Envelope de resultado | Envelope mais `id`, `providerId`, `externalTransactionId`, `walletId`, `kind`, `money`, `referenceTransactionId`, `createdAt`, `processedAt`; `limit` do ledger fora de 1..200 é `400` | Defaults adotados na W7; **o autor pode vetar** |
+| Ferramentas | `biome.json` (ADR-0020) | `biome.jsonc`, com `unsafeParameterDecoratorsEnabled` (sem isso o Biome não parseia `@Body`/`@Param`) | Nenhuma regra de lint foi desligada; os ADRs seguem citando `biome.json` (W1, W5) |
+| `test:concurrency` | Falhar sem testes | Ainda usa `--pass-with-no-tests`, embora já existam 10 arquivos de concorrência | Sugestão da W1 (remover a flag) **não aplicada**: está fora do escopo da W11 |
+| Eventos | `playerId` pode ir no `data` | `playerId` **não** vai no `data` dos eventos | Permitido, não exigido (W2) |
+
+**Cortes:** nenhum do escopo obrigatório (T-044 foi feita). Ficaram de fora só as tarefas de stretch S-01..S-06; veja "Não implementado, documentado" em [traceability.md](traceability.md).
+
+**Prepare-se para:** "o que mudou do desenho?" — responda pelas três linhas que mudam comportamento visível (reconciliação em uma instrução, shutdown próprio, `FAILED` sem lock) e diga que o resto são detalhes de assinatura e de configuração, todos nos relatórios.
