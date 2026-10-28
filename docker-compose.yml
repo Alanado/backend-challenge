@@ -1,6 +1,32 @@
-# Infra de desenvolvimento: Postgres durável e emulador SQS (R-01). Os serviços app1..3 entram na T-005b (W10).
-# Subir: `docker compose up -d --wait` e depois `bun run queues:create`.
+# Desenvolvimento e demonstração: Postgres durável, emulador SQS (R-01) e a aplicação em três instâncias.
+#   Tudo:        `docker compose up --build -d --wait` (o serviço `migrate` roda uma vez, antes dos apps)
+#   Só a infra:  `docker compose up -d --wait postgres sqs` e depois `bun run queues:create`
+#   Smoke:       `bun run compose:smoke`
+# Quem roda as migrations e cria as filas é o serviço `migrate`, de uma execução só: assim as três
+# instâncias nunca migram ao mesmo tempo, e os apps só sobem depois que ele termina com sucesso.
 name: wagering
+
+x-app: &app
+  build: .
+  image: wagering-app:dev
+  restart: unless-stopped
+  # `SHUTDOWN_GRACE_MS` (20 s) + fechamento do pool cabem nos 30 s; passado isso o Docker manda SIGKILL.
+  stop_grace_period: 30s
+  depends_on:
+    postgres:
+      condition: service_healthy
+    sqs:
+      condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
+
+x-app-env: &app-env
+  NODE_ENV: production
+  DATABASE_URL: postgres://wagering:wagering@postgres:5432/wagering # credencial fictícia, só para desenvolvimento
+  SQS_ENDPOINT: http://sqs:4566
+  SHUTDOWN_GRACE_MS: "20000"
+  # Pausa com a readiness em 503 e o listener ainda aberto, para quem observa tirar a instância de rotação.
+  SHUTDOWN_DRAIN_DELAY_MS: "2000"
 
 services:
   postgres:
@@ -39,6 +65,56 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+
+  migrate:
+    <<: *app
+    # Sem depends_on dos outros apps e sem restart: roda uma vez e sai.
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      sqs:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://wagering:wagering@postgres:5432/wagering
+      SQS_ENDPOINT: http://sqs:4566
+    command: ["sh", "-c", "bun run migration:up && bun run queues:create"]
+
+  app1:
+    <<: *app
+    ports:
+      - "3001:3001"
+    environment:
+      <<: *app-env
+      PORT: "3001"
+    healthcheck: &app-health
+      test:
+        - CMD
+        - bun
+        - -e
+        - "fetch('http://localhost:'+process.env.PORT+'/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 3s
+      timeout: 4s
+      retries: 20
+      start_period: 15s
+
+  app2:
+    <<: *app
+    ports:
+      - "3002:3002"
+    environment:
+      <<: *app-env
+      PORT: "3002"
+    healthcheck: *app-health
+
+  app3:
+    <<: *app
+    ports:
+      - "3003:3003"
+    environment:
+      <<: *app-env
+      PORT: "3003"
+    healthcheck: *app-health
 
 volumes:
   pgdata:

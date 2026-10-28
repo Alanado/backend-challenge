@@ -133,3 +133,22 @@ Script: `bun run spike:tooling` ([spikes/tooling/main.ts](../../spikes/tooling/m
 | **Total da base** | **≈202 MiB** de 7,75 GiB |
 
 `free -m` no WSL: `used` 2172 MiB com a base de pé (a máquina já tinha ≈1,7 GB em uso antes de subir os contêineres; `buff/cache` inclui as imagens). A base cabe com enorme folga; o orçamento crítico de R-06 passa a ser as 3 instâncias da aplicação e os testes (medir na T-005b, W10).
+
+## T-005b — Compose completo e RAM (R-06)
+
+- [Dockerfile](../../Dockerfile): `oven/bun:1.4.4-slim` fixada por tag e digest (`sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4`); sem etapa de build (o Bun executa o TypeScript), `bun install --frozen-lockfile --production --ignore-scripts` (o `prepare` do projeto instala hooks do git, que não existem na imagem), usuário `bun`. A mesma imagem (`wagering-app:dev`) serve `app1..3` e `migrate`.
+- **Quem roda as migrations (escolha reportada):** um serviço `migrate` **de uma execução só** (`restart: "no"`), que roda `migration:up` e `queues:create` e sai. `app1..3` têm `depends_on: migrate: condition: service_completed_successfully` (além de Postgres e SQS saudáveis), então as três instâncias nunca migram ao mesmo tempo e nunca sobem antes do schema e das filas. Alternativa descartada: migrar no boot de cada app (corrida de 3 migradores e acoplamento do app ao DDL).
+- `app1..3`: portas 3001–3003 (`PORT` por serviço), `stop_grace_period: 30s`, `SHUTDOWN_GRACE_MS=20000`, `SHUTDOWN_DRAIN_DELAY_MS=2000`, healthcheck em `/health/ready`. `docker compose stop app1`: exit 0 em 2,7 s, com um 503 de readiness visível no log antes de `app_stopped`.
+- `docker compose down -v && docker compose up --build -d --wait`: tudo `healthy` em 32 s (imagens já locais; o build do app é o único passo novo). `bun run compose:smoke` ([scripts/compose-smoke.ts](../../scripts/compose-smoke.ts)): wallet, um `BET` por cada instância, saldo `70.00` lido nas três, ledger com 4 lançamentos e reconciliação consistente; exit 0.
+
+### RAM completa (R-06), WSL com 7,75 GiB para os contêineres
+
+| Cenário | app1 | app2 | app3 | Postgres | SQS (LocalStack) | Soma |
+|---|---|---|---|---|---|---|
+| Ocioso, após o smoke | 97,7 MiB | 82,3 MiB | 82,8 MiB | 52,6 MiB | 137,1 MiB | ≈ 453 MiB |
+| Durante uma rajada (amostra com mais memória) | 151,3 MiB | 139,6 MiB | 140,5 MiB | 124,6 MiB | 139,0 MiB | ≈ 695 MiB |
+| Depois de duas rajadas (9 000 requisições `BET`, 0 respostas não 2xx, `deadlocks=0`) | 164,7 MiB | 159,5 MiB | 146,5 MiB | 151,8 MiB | 161,7 MiB | ≈ 784 MiB |
+
+`free -m` (MiB, `used`): 4585 com a pilha ociosa e 4841 depois da rajada; a máquina já tinha ≈ 4,3 GB em uso antes de subir qualquer contêiner (`available` ≥ 3,1 GB durante a medição).
+
+**Suíte de concorrência (3 processos Bun reais + Postgres e emulador de teste + o executor de testes):** pico de `used` = 4926 MiB (4313 MiB antes de começar, +613 MiB), soma do RSS de todos os processos `bun` ≤ 610 MiB, contêineres ≤ 327 MiB. Cabe em 8 GB com folga; R-06 não bloqueia.

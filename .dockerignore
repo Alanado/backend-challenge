@@ -1,0 +1,12 @@
+.git
+.githooks
+.env
+node_modules
+coverage
+dist
+specs
+spikes
+test
+README.md
+CLAUDE.md
+docker-compose*.yml

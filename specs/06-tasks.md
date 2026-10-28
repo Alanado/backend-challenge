@@ -15,7 +15,7 @@ Resultados do spike: ver [adr/0002-spike.md](adr/0002-spike.md).
 - [x] **T-003** Spike R-01/R-03: emulador SQS **sem token** (LocalStack fixado em tag anterior a 2026.03, ou MiniStack); validar FIFO, `MessageGroupId`, dedup, DLQ FIFO com redrive, `ChangeMessageVisibility`; AWS SDK v3 no Bun. **Se nenhum funcionar: parar e consultar o autor.**
 - [x] **T-004** Spike R-04/R-05: `prom-client` (counter, gauge, histogram, `/metrics`) no Bun; Biome (`noFloatingPromises`, `useImportType` desligado); commitlint + hook sem Husky global.
 - [x] **T-005a** `docker-compose.yml` e `docker-compose.test.yml` **somente com Postgres e emulador SQS**; script idempotente de criação de filas; medir a RAM dessa base (R-06). *(RNF-03, RNF-04)*
-- [ ] **T-005b** *(executada na onda W10, depois que o app sobe)* `Dockerfile` e serviços `app1..3` no `docker-compose.yml`; `docker compose up --build` sobe tudo; medir a RAM completa (R-06). *(RNF-03, RNF-04)*
+- [x] **T-005b** *(executada na onda W10, depois que o app sobe)* `Dockerfile` e serviços `app1..3` no `docker-compose.yml`; `docker compose up --build` sobe tudo; medir a RAM completa (R-06). *(RNF-03, RNF-04)*
 - [x] **T-006** `CLAUDE.md` com comandos reais e Biome/commitlint ativos; este arquivo atualizado com os resultados do spike.
 
 ## M1 — Domínio (Dia 1)
