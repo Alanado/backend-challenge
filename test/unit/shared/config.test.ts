@@ -38,6 +38,7 @@ describe("loadConfig", () => {
 			cooldownMaxMs: 30000,
 		});
 		expect(config.shutdownGraceMs).toBe(20000);
+		expect(config.shutdownDrainDelayMs).toBe(0);
 		expect(config.testFault).toBe("");
 	});
 
@@ -68,7 +69,11 @@ describe("loadConfig", () => {
 			ENABLE_OUTBOX_PUBLISHER: "TRUE",
 			ENABLE_PENDING_WORKER: "1",
 			PORT: "3002",
+			SHUTDOWN_GRACE_MS: "500",
+			SHUTDOWN_DRAIN_DELAY_MS: "1500",
 		});
+		expect(config.shutdownGraceMs).toBe(500);
+		expect(config.shutdownDrainDelayMs).toBe(1500);
 		expect(config.dbPoolMax).toBe(25);
 		expect(config.lockTimeoutMs).toBe(250);
 		expect(config.pendingRef.factor).toBe(3);

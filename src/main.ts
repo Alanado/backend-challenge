@@ -4,6 +4,7 @@ import { NestFactory } from "@nestjs/core";
 import { Logger } from "nestjs-pino";
 import { appModule } from "./app.module";
 import { ActiveRoles } from "./modules/platform/infrastructure/active-roles";
+import { LifecycleState } from "./modules/platform/infrastructure/lifecycle-state";
 import { type AppConfig, ConfigError, loadConfig } from "./shared/config";
 
 // Boot/stop lines (event names and role names only; no values) stay as plain JSON lines: `roles`
@@ -51,7 +52,18 @@ async function main(): Promise<void> {
 		if (stopping) return;
 		stopping = true;
 		clearInterval(keepAlive);
+		// (1) Readiness fails first, with the listener still open for `shutdownDrainDelayMs`, so
+		// whoever watches it (a load balancer, the I-18 test) sees the 503 before connections stop.
+		app.get(LifecycleState).drain();
 		try {
+			if (config.shutdownDrainDelayMs > 0) {
+				await new Promise((resolve) =>
+					setTimeout(resolve, config.shutdownDrainDelayMs),
+				);
+			}
+			// (2) HTTP stops accepting and drains what is in flight, (3-5) the roles stop in turn (the
+			// consumer waits for its handlers up to SHUTDOWN_GRACE_MS and returns what is left), (6) the
+			// pool closes. `close()` runs them in that order.
 			await app.close();
 			emit("app_stopped", { signal });
 		} catch (error) {

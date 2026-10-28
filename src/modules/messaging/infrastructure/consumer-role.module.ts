@@ -124,6 +124,7 @@ export class ConsumerRole extends RoleLifecycle {
 					queueName: config.sqs.queueName,
 					concurrency: config.sqs.concurrency,
 					handlerTimeoutMs: config.sqs.handlerTimeoutMs,
+					shutdownGraceMs: config.shutdownGraceMs,
 					waitTimeSeconds: config.sqs.waitTimeSeconds,
 					faults: createFaultInjector(config.testFault),
 					logger,

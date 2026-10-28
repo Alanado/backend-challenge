@@ -97,6 +97,7 @@ const envSchema = z.object({
 	BREAKER_COOLDOWN_MAX_MS: int(30000, 1),
 
 	SHUTDOWN_GRACE_MS: int(20000, 0),
+	SHUTDOWN_DRAIN_DELAY_MS: int(0, 0),
 
 	TEST_FAULT: z.preprocess(
 		blankToUndefined,
@@ -149,6 +150,8 @@ export interface AppConfig {
 	};
 	breaker: { cooldownMinMs: number; cooldownMaxMs: number };
 	shutdownGraceMs: number;
+	/** Pause between "draining" and closing the listener, so readiness is seen failing (0 = none). */
+	shutdownDrainDelayMs: number;
 	testFault: FaultPoint | "";
 }
 
@@ -232,6 +235,7 @@ export function loadConfig(env: Env): AppConfig {
 			cooldownMaxMs: e.BREAKER_COOLDOWN_MAX_MS,
 		},
 		shutdownGraceMs: e.SHUTDOWN_GRACE_MS,
+		shutdownDrainDelayMs: e.SHUTDOWN_DRAIN_DELAY_MS,
 		testFault: e.TEST_FAULT,
 	};
 }

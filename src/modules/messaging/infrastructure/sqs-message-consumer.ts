@@ -41,11 +41,18 @@ export interface SqsMessageConsumerOptions {
 	deadLetter: DeadLetterQueue;
 	/** The circuit breaker: while it does not allow requests nothing is fetched or handled. */
 	gate?: ReceiveGate;
+	/**
+	 * SHUTDOWN_GRACE_MS: how long `stop()` waits for the handlers in flight. When it runs out, their
+	 * messages are returned (visibility 0) and NOT deleted. Without it `stop()` waits as long as it takes.
+	 */
+	shutdownGraceMs?: number;
 }
 
 interface Delivery {
 	message: InboundMessage;
 	receiptHandle: string;
+	/** `stop()` gave this message back: whatever its handler answers later is ignored. */
+	abandoned?: boolean;
 }
 
 /**
@@ -64,6 +71,8 @@ export class SqsMessageConsumer extends MessageConsumer {
 	private loop: Promise<void> | undefined;
 	private stopping = false;
 	private abort = new AbortController();
+	/** Received and not yet deleted, released or returned: what `stop()` gives back after the grace period. */
+	private readonly open = new Set<Delivery>();
 
 	constructor(private readonly options: SqsMessageConsumerOptions) {
 		super();
@@ -87,8 +96,31 @@ export class SqsMessageConsumer extends MessageConsumer {
 	async stop(): Promise<void> {
 		this.stopping = true;
 		this.abort.abort();
-		await this.loop;
+		const { loop } = this;
+		const grace = this.options.shutdownGraceMs;
+		if (loop !== undefined) {
+			if (grace === undefined || (await settlesWithin(loop, grace))) {
+				await loop;
+			} else {
+				await this.returnOpenDeliveries();
+			}
+		}
 		this.loop = undefined;
+	}
+
+	/**
+	 * The grace period is over and handlers are still running: hand their messages (and the ones
+	 * of the batch that never got a slot) back at once, and never delete them. If a handler had
+	 * already committed, the redelivery is dropped by the inbox.
+	 */
+	private async returnOpenDeliveries(): Promise<void> {
+		const pending = [...this.open];
+		this.options.logger.warn(
+			"shutdown grace period ended with handlers still running; returning their messages",
+			{ reason: "shutdown_grace_expired" },
+		);
+		for (const delivery of pending) delivery.abandoned = true;
+		await Promise.all(pending.map((d) => this.setVisibility(d, 0)));
 	}
 
 	private async run(): Promise<void> {
@@ -107,7 +139,10 @@ export class SqsMessageConsumer extends MessageConsumer {
 				await this.pause(RECEIVE_ERROR_PAUSE_MS);
 				continue;
 			}
-			if (deliveries.length > 0) await this.processBatch(deliveries);
+			if (deliveries.length > 0) {
+				for (const delivery of deliveries) this.open.add(delivery);
+				await this.processBatch(deliveries);
+			}
 		}
 	}
 
@@ -161,12 +196,15 @@ export class SqsMessageConsumer extends MessageConsumer {
 
 	private async processGroup(group: Delivery[]): Promise<void> {
 		for (const [index, delivery] of group.entries()) {
+			if (delivery.abandoned) return;
 			// Stopping, or the breaker opened since the batch was fetched: hand the rest back untouched.
 			if (this.stopping || this.options.gate?.isOpen()) {
 				await this.giveBack(group.slice(index));
 				return;
 			}
 			const outcome = await this.invoke(delivery.message);
+			// Returned by `stop()` while it ran: its late answer (even an ack) changes nothing.
+			if (delivery.abandoned) return;
 			const rest = group.slice(index + 1);
 			switch (outcome.kind) {
 				case "ack":
@@ -252,6 +290,7 @@ export class SqsMessageConsumer extends MessageConsumer {
 
 	/** Deletes the message: after the handler said `ack`, or after its copy reached the DLQ. */
 	private async acknowledge(delivery: Delivery): Promise<void> {
+		this.open.delete(delivery);
 		try {
 			await this.options.client.send(
 				new DeleteMessageCommand({
@@ -277,6 +316,7 @@ export class SqsMessageConsumer extends MessageConsumer {
 		delivery: Delivery,
 		seconds: number,
 	): Promise<void> {
+		this.open.delete(delivery);
 		try {
 			await this.options.client.send(
 				new ChangeMessageVisibilityCommand({
@@ -316,6 +356,22 @@ export class SqsMessageConsumer extends MessageConsumer {
 			const timer = setTimeout(done, ms);
 			this.abort.signal.addEventListener("abort", done);
 		});
+	}
+}
+
+/** `true` when `work` settled within `ms`; `false` when the time ran out first. */
+async function settlesWithin(
+	work: Promise<void>,
+	ms: number,
+): Promise<boolean> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const expired = new Promise<false>((resolve) => {
+		timer = setTimeout(() => resolve(false), ms);
+	});
+	try {
+		return await Promise.race([work.then(() => true as const), expired]);
+	} finally {
+		clearTimeout(timer);
 	}
 }
 

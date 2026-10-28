@@ -146,3 +146,34 @@ export async function peekDeadLetters(
 		reason: m.MessageAttributes?.reason?.StringValue,
 	}));
 }
+
+export interface QueueCounts {
+	/** Deliverable right now. */
+	visible: number;
+	/** Received and hidden by the visibility timeout. */
+	inFlight: number;
+	delayed: number;
+}
+
+/** Like `queueDepth`, but split: a returned message is `visible`, a held one is `inFlight`. */
+export async function queueCounts(
+	sqs: SQSClient,
+	queueUrl: string,
+): Promise<QueueCounts> {
+	const response = await sqs.send(
+		new GetQueueAttributesCommand({
+			QueueUrl: queueUrl,
+			AttributeNames: [
+				"ApproximateNumberOfMessages",
+				"ApproximateNumberOfMessagesNotVisible",
+				"ApproximateNumberOfMessagesDelayed",
+			],
+		}),
+	);
+	const a = response.Attributes ?? {};
+	return {
+		visible: Number(a.ApproximateNumberOfMessages ?? 0),
+		inFlight: Number(a.ApproximateNumberOfMessagesNotVisible ?? 0),
+		delayed: Number(a.ApproximateNumberOfMessagesDelayed ?? 0),
+	};
+}
