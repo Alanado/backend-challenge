@@ -6,6 +6,8 @@
 export interface LogFields {
 	correlationId?: string;
 	messageId?: string;
+	/** Outbox event id (a random uuid, not business data). */
+	eventId?: string;
 	transactionId?: string;
 	walletId?: string;
 	providerId?: string;

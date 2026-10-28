@@ -3,6 +3,7 @@ import {
 	type IdempotentOutcome,
 	type LockConflictType,
 	MetricsPort,
+	type RetryComponent,
 	type TransactionChannel,
 } from "../../src/modules/platform/application/metrics";
 import {
@@ -48,13 +49,23 @@ export class RecordingMetrics extends MetricsPort {
 	}> = [];
 	readonly lockConflicts: LockConflictType[] = [];
 	readonly durations: Array<{ outcome: string; kind: string }> = [];
+	readonly retries: RetryComponent[] = [];
+	outboxLagSeconds = 0;
+	outboxPublishFailures = 0;
 
-	retry(): void {}
 	dlqMessage(): void {}
-	setOutboxLagSeconds(): void {}
-	outboxPublishFailed(): void {}
 	reconciliationDivergence(): void {}
 	setCircuitBreakerOpen(): void {}
+
+	retry(component: RetryComponent): void {
+		this.retries.push(component);
+	}
+	setOutboxLagSeconds(seconds: number): void {
+		this.outboxLagSeconds = seconds;
+	}
+	outboxPublishFailed(): void {
+		this.outboxPublishFailures += 1;
+	}
 
 	transactionProcessed(labels: ProcessedCall): void {
 		this.processed.push(labels);

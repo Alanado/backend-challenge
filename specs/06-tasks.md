@@ -52,7 +52,7 @@ Resultados do spike: ver [adr/0002-spike.md](adr/0002-spike.md).
 
 ## M4 — Mensageria e multi-instância (Dia 2, tarde)
 
-- [ ] **T-040** Publisher da outbox (`SKIP LOCKED`, lote, backoff, `publish_failed`, métricas de lag). *(RF-OUT-*; TST-I-13, C-06)*
+- [x] **T-040** Publisher da outbox (`SKIP LOCKED`, lote, backoff, `publish_failed`, métricas de lag). *(RF-OUT-*; TST-I-13, C-06)*
 - [ ] **T-041** Porta `MessageConsumer` + poller SQS (grupos em série, concorrência entre grupos, visibilidade, timeout). *(RF-MSG-01..04/08)*
 - [ ] **T-042a** Inbox (ramo SQS do caso de uso, antes do lock da wallet) + classificação de erros (negócio/transitório/infra/permanente). *(RF-MSG-01/02/04, RF-IDP-07; TST-U-11, TST-I-11)*
 - [ ] **T-042b** DLQ explícita para permanentes + exaustão (`ApproximateReceiveCount >= 8` → `FAILED` + DLQ + delete). *(RF-MSG-04/05/08; TST-I-12)*
