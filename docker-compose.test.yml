@@ -1,0 +1,51 @@
+# Infra compartilhada pelos testes de integração e concorrência (ADR-0019): um Postgres e um emulador SQS.
+# Portas deslocadas (5433/4567) para conviver com o docker-compose.yml de desenvolvimento (5432/4566).
+# Subir: `bun run test:infra:up` · Derrubar: `bun run test:infra:down`.
+name: wagering-test
+
+services:
+  postgres:
+    image: postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    environment:
+      POSTGRES_USER: wagering
+      POSTGRES_PASSWORD: wagering # credencial fictícia, só para teste
+      POSTGRES_DB: wagering_test
+    ports:
+      - "5433:5432"
+    # Só no compose de TESTE: fsync/synchronous_commit/full_page_writes desligados e dados em tmpfs, para
+    # criar bancos por suíte (CREATE DATABASE ... TEMPLATE) rápido. Nunca usar isto em dados reais.
+    # max_connections folgado: dezenas de suítes e várias instâncias da aplicação em paralelo.
+    command:
+      - postgres
+      - -c
+      - max_connections=300
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wagering -d wagering_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  sqs:
+    # R-01: LocalStack 4.14.0 é a última tag anterior a 2026.03 (exigência de auth token). Sem token, nunca.
+    image: localstack/localstack:4.14.0@sha256:3ebc37595918b8accb852f8048fef2aff047d465167edd655528065b07bc364a
+    environment:
+      SERVICES: sqs
+    ports:
+      - "4567:4566"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'curl -sf http://localhost:4566/_localstack/health | grep -Eq ''"sqs": "(available|running)"''',
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 30
