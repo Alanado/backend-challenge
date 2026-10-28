@@ -38,3 +38,43 @@ Script: `bun run spike:nest-mikro` ([spikes/nest-mikro/main.ts](../../spikes/nes
 - `em.execute` usa placeholders `?`.
 - `PESSIMISTIC_WRITE` em `findOne` só funciona dentro de transação (`em.transactional`).
 - O módulo `@mikro-orm/nestjs` expõe `EntityManager` do pacote do driver (`@mikro-orm/postgresql`) injetável por tipo.
+
+## T-003 — R-01/R-03: emulador SQS sem token + AWS SDK v3 no Bun
+
+Script: `bun run spike:sqs` ([spikes/sqs/main.ts](../../spikes/sqs/main.ts); endpoint em `SPIKE_SQS_ENDPOINT`, padrão `http://localhost:4567`, o do compose de teste). Resultado: **11/11 verificações ok** no LocalStack 4.14.0; R-01 e R-03 **não bloqueiam**.
+
+### Escolha do emulador
+
+| Candidato | Imagem | Sem token | Resultado do spike |
+|---|---|---|---|
+| **LocalStack** (escolhido) | `localstack/localstack:4.14.0` (`sha256:3ebc37595918b8accb852f8048fef2aff047d465167edd655528065b07bc364a`), build de 2026-02-26, **última tag anterior a 2026.03** (a `2026.03.0` é de 2026-03-23) | sim: nenhuma variável de token; o log só exibe um aviso informativo sobre a unificação de março de 2026 | **11/11** |
+| MiniStack | `ministackorg/ministack:1.5.33` (`sha256:b58186186515a372798ccf0ca9975c295db219b5a811975337d6967b968e07b4`) | sim | **10/11**: falha o item 7 (aceita `MessageGroupId` com 129 caracteres: `Successful=bad,ok1,ok2`) |
+
+O MiniStack é mais leve, mas não valida limites de parâmetro que o SQS real valida, o que enfraquece os testes de erro. O LocalStack é o padrão do projeto (ADR-0002); o MiniStack fica como plano B documentado. **Token nunca no caminho padrão**: o compose não define `LOCALSTACK_AUTH_TOKEN`. Fixar por tag **e** digest.
+
+### Versões
+
+| Componente | Versão |
+|---|---|
+| `@aws-sdk/client-sqs` | 3.1158.0 |
+| Bun | 1.4.4 |
+| Emulador | LocalStack 4.14.0 (`SERVICES=sqs`) |
+
+### Resultado por item (LocalStack 4.14.0)
+
+| # | Item | Resultado |
+|---|---|---|
+| 1 | SDK v3 no Bun | ok: `SendMessage`, `SendMessageBatch`, `ReceiveMessage`, `DeleteMessage`, `ChangeMessageVisibility`, `GetQueueAttributes` |
+| 2 | FIFO + DLQ FIFO com `RedrivePolicy` | ok. Com `maxReceiveCount=2`, a mensagem é recebida 2× (`ApproximateReceiveCount` 1, 2); na tentativa seguinte vai para a DLQ FIFO. A policy lida de volta traz `maxReceiveCount` e o ARN da DLQ |
+| 3 | `MessageGroupId` | ordem preservada (`a1..a5`). **Bloqueio de cabeça de fila**: com `a1` em voo, `a2` não é entregue, o grupo B entrega em paralelo, e `a2` é liberada após o `DeleteMessage` de `a1`. Informativo: **um único `ReceiveMessage` devolve várias mensagens do mesmo grupo** (3 de 3, em ordem), logo o agrupamento por `MessageGroupId` dentro do lote do poller (03-messaging §3.4) é necessário e correto |
+| 4 | `MessageDeduplicationId` | 2 envios, 1 entrega; os dois envios devolvem o mesmo `MessageId` |
+| 5 | Long polling e atributos | fila vazia com `WaitTimeSeconds=2` espera ≈2,0 s; com mensagem enviada durante a espera, acorda em ≈0,5 s. `ApproximateReceiveCount` e `MessageGroupId` chegam em `Attributes` quando pedidos em `MessageSystemAttributeNames` |
+| 6 | `ChangeMessageVisibility` | `0` devolve na hora (`ApproximateReceiveCount` sobe para 2); `3` adia ≈3,2 s |
+| 7 | `SendMessageBatch` parcial | `MessageGroupId` de 129 caracteres falha **sozinho**: `Failed=[{Id: "bad", Code: "InvalidParameterValueException", SenderFault: true}]`; as demais passam |
+| 8 | Fila inexistente | **todas as operações** (`GetQueueUrl`, `ReceiveMessage`, `SendMessage`, `GetQueueAttributes`) falham com `err.name = "QueueDoesNotExist"`, `err.Code = "AWS.SimpleQueueService.NonExistentQueue"`, HTTP 400, `$fault = "client"`. **Insumo para a classificação:** `$fault = "client"` não pode ser usado sozinho para decidir "permanente"; fila inexistente (ex.: ainda não criada no boot) deve ser tratada como **erro de infraestrutura/transitório** e reportada no readiness (ADR-0018), classificando por `err.name === "QueueDoesNotExist"` |
+| 9 | Tempo de subida e RAM | ≈3,4 s até `sqs: available` (imagem local); ≈98 MiB ocioso, ≈128 MiB após o spike. (MiniStack: ≈2,7 s e ≈38–45 MiB) |
+
+### Particularidades
+
+- A imagem do LocalStack tem 1,77 GB (MiniStack: 258 MB); o primeiro `pull` é demorado.
+- Região e credenciais podem ser fictícias (`us-east-1`, `test`/`test`).

@@ -13,7 +13,8 @@
 		"spike:nest-mikro": "bun run spikes/nest-mikro/main.ts",
 		"migration:up": "bun run scripts/migrate.ts up",
 		"migration:down": "bun run scripts/migrate.ts down",
-		"migration:create": "bun run scripts/migrate.ts create"
+		"migration:create": "bun run scripts/migrate.ts create",
+		"spike:sqs": "bun run spikes/sqs/main.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.6.3",
@@ -23,6 +24,7 @@
 		"typescript": "7.0.2"
 	},
 	"dependencies": {
+		"@aws-sdk/client-sqs": "3.1158.0",
 		"@mikro-orm/core": "7.2.5",
 		"@mikro-orm/migrations": "7.2.5",
 		"@mikro-orm/nestjs": "7.1.0",
