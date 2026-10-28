@@ -91,7 +91,14 @@ async function buildTemplate(name: string, path: string): Promise<void> {
 		await admin.query(`create database ${quote(building)}`);
 		try {
 			if (migrationFiles(path).length > 0) {
-				await withMigrator(urlFor(building), path, (migrator) => migrator.up());
+				await withMigrator(
+					urlFor(building),
+					path,
+					(migrator) => migrator.up(),
+					{
+						silent: true,
+					},
+				);
 			}
 			// The pool's backends exit asynchronously after close; RENAME needs them gone.
 			await eventually(

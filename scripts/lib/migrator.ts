@@ -9,6 +9,7 @@ export async function withMigrator<T>(
 	url: string,
 	path: string,
 	work: (migrator: IMigrator) => Promise<T>,
+	{ silent = false }: { silent?: boolean } = {},
 ): Promise<T> {
 	const orm = await MikroORM.init({
 		clientUrl: url,
@@ -21,6 +22,7 @@ export async function withMigrator<T>(
 			transactional: true,
 			allOrNothing: true,
 			snapshot: false,
+			silent,
 		},
 	});
 	try {
