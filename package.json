@@ -1,0 +1,19 @@
+{
+	"name": "distributed-wagering-processor",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"lint": "biome check .",
+		"format": "biome format --write .",
+		"test:unit": "bun test test/unit",
+		"test:integration": "bun test test/integration",
+		"test:concurrency": "bun test test/concurrency",
+		"test": "bun run test:unit && bun run test:integration && bun run test:concurrency"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.6.3",
+		"@types/bun": "1.4.4",
+		"typescript": "7.0.2"
+	}
+}
