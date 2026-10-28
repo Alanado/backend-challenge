@@ -16,7 +16,7 @@ Serviço financeiro distribuído que processa transações de apostas (`BET`, `W
 ## Subir tudo com 3 instâncias
 
 ```bash
-bun install
+bun install --frozen-lockfile
 docker compose up --build -d --wait
 bun run compose:smoke
 ```
@@ -34,7 +34,7 @@ docker compose down -v          # derruba e apaga o volume do Postgres
 Para depurar fora do Docker, suba só a infra, migre e rode o app com recarga automática:
 
 ```bash
-bun install
+bun install --frozen-lockfile
 docker compose up -d --wait postgres sqs     # Postgres (5432) e SQS (4566)
 cp .env.example .env                         # DATABASE_URL e SQS_ENDPOINT de desenvolvimento
 bun run queues:create                        # filas FIFO, DLQ e fila de eventos (idempotente)
@@ -60,7 +60,7 @@ bun run test:infra:down             # derruba a infra de teste e apaga os dados
 - Cada suíte cria um **banco novo** a partir de um template já migrado e **filas com sufixo aleatório**; não há `TRUNCATE` (os triggers do ledger o bloqueiam) nem `sleep` fixo (os testes esperam com `eventually`).
 - Todo teste que toca uma wallet termina chamando `assertLedgerInvariant`: saldo = soma do ledger, cadeia contínua, saldo ≥ 0, `version` coerente.
 - Os títulos dos testes carregam o ID do plano (`TST-U-01`, `TST-I-05`, `TST-C-04`…). A matriz requisito → tarefa → teste está em [specs/traceability.md](specs/traceability.md) (gerada por `bun scripts/check-traceability.ts`).
-- Cobertura: `bun test --coverage test/unit` (sem limite numérico; o foco são os caminhos críticos).
+- Cobertura, sem limite numérico (o foco são os caminhos críticos): `bun test --coverage test/unit` (sem infra) ou `bun test --coverage` (tudo, com `test:infra:up`).
 - **Teste de carga (`test:load`, stretch S-01): não foi implementado.**
 
 Conferências de documentação (saem com 1 no primeiro desvio):

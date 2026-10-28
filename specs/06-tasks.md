@@ -74,7 +74,7 @@ Resultados do spike: ver [adr/0002-spike.md](adr/0002-spike.md).
 - [x] **T-060** `README.md` (setup, comandos, como rodar 3 instâncias, como rodar testes, declaração de uso de IA/SDD).
 - [x] **T-061** `ARCHITECTURE.md` (curado a partir dos ADRs: decisões, trade-offs, limitações, ordem de locks, interpretações, taxonomia de falhas, status HTTP).
 - [x] **T-062** Revisão de rastreabilidade: matriz requisito → tarefa → teste sem buracos; `study-guide.md` atualizado com o que mudou na implementação.
-- [ ] **T-063** Passada final: suíte completa 3× seguidas (flakiness), cobertura, `docker compose up` do zero.
+- [x] **T-063** Passada final: suíte completa 3× seguidas (flakiness), cobertura, `docker compose up` do zero.
 
 ## Stretch (só com M0–M5 verdes, nesta ordem)
 

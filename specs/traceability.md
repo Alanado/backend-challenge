@@ -6,7 +6,7 @@
 
 - Requisitos: 78 (72 com `TST-*`, 6 com verificação por comando ou revisão).
 - Testes do plano: 45; citados em títulos de teste: 45.
-- Tarefas T: 46 de 47 concluídas.
+- Tarefas T: 47 de 47 concluídas.
 
 ## Requisito → tarefa → teste
 
@@ -243,7 +243,7 @@ Tarefas = as que citam o requisito ou um dos seus testes (06-tasks). Testes = `T
 - [x] **T-060** `README.md` (setup, comandos, como rodar 3 instâncias, como rodar testes, declaração de uso de IA/SDD).
 - [x] **T-061** `ARCHITECTURE.md` (curado a partir dos ADRs: decisões, trade-offs, limitações, ordem de locks, interpretações, taxonomia de falhas, status HTTP).
 - [x] **T-062** Revisão de rastreabilidade: matriz requisito → tarefa → teste sem buracos; `study-guide.md` atualizado com o que mudou na implementação.
-- [ ] **T-063** Passada final: suíte completa 3× seguidas (flakiness), cobertura, `docker compose up` do zero.
+- [x] **T-063** Passada final: suíte completa 3× seguidas (flakiness), cobertura, `docker compose up` do zero.
 
 ## Não implementado, documentado (stretch)
 
