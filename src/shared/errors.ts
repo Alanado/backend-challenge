@@ -23,3 +23,19 @@ export class CurrencyMismatchError extends DomainError {
 export class InvalidLedgerEntryError extends DomainError {
 	readonly code = "INVALID_LEDGER_ENTRY";
 }
+
+export class InvalidTransactionStateError extends DomainError {
+	readonly code = "INVALID_TRANSACTION_STATE";
+
+	constructor(from: string, operation: string) {
+		super(`cannot apply ${operation} to a transaction in state ${from}`);
+	}
+}
+
+export class InvalidReferenceRequirementError extends DomainError {
+	readonly code = "INVALID_REFERENCE_REQUIREMENT";
+}
+
+export class LedgerDirectionUnavailableError extends DomainError {
+	readonly code = "LEDGER_DIRECTION_UNAVAILABLE";
+}

@@ -20,7 +20,7 @@ Definição de pronto de uma tarefa: testes da tarefa verdes, `bun run typecheck
 
 - [x] **T-010** `Money` (big.js, escala 2, parse estrito) + erros de domínio. *(RF-MNY-01..04; TST-U-01, U-02)*
 - [x] **T-011** `Wallet` (`open`, `rehydrate`, `debit`, `credit`, `version`) + `WalletLedgerEntry`. *(RF-WAL-03/04, RF-LED-03; TST-U-03, U-07)*
-- [ ] **T-012** `WagerTransaction` (estados, transições, `ledgerDirectionFor`, `matchesPayload`). *(RF-TXN-01; TST-U-04, U-05)*
+- [x] **T-012** `WagerTransaction` (estados, transições, `ledgerDirectionFor`, `matchesPayload`). *(RF-TXN-01; TST-U-04, U-05)*
 - [ ] **T-013** `payloadHash` canônico e `IdempotencyKey`. *(RF-IDP-05; TST-U-06)*
 - [ ] **T-014** `InboxMessage`, `OutboxMessage` (backoff, `isDue`), `IntegrationEvent` + 5 eventos. *(RF-OUT-07; TST-U-08, U-09)*
 - [ ] **T-015** Políticas de referência/reversão (puras): kind permitido, mismatch, valor, já revertida, `PENDING_REFERENCE`. *(RF-TXN-06..09, 11; TST-U-05)*
