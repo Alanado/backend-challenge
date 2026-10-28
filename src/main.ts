@@ -1,12 +1,13 @@
 import "reflect-metadata";
 import type { INestApplicationContext } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import { Logger } from "nestjs-pino";
 import { appModule } from "./app.module";
 import { ActiveRoles } from "./modules/platform/infrastructure/active-roles";
 import { type AppConfig, ConfigError, loadConfig } from "./shared/config";
 
-// Minimal boot/stop lines (event names and role names only; no values). The structured logger
-// replaces them in W5.
+// Boot/stop lines (event names and role names only; no values) stay as plain JSON lines: `roles`
+// and `port` are deliberately not among the log fields, and nothing sensitive is in them.
 const emit = (event: string, fields: Record<string, unknown> = {}): void => {
 	console.log(JSON.stringify({ event, ...fields }));
 };
@@ -31,13 +32,13 @@ async function main(): Promise<void> {
 
 	// Without the HTTP role there is no server at all: the app is a plain context.
 	const http = config.enableHttp
-		? await NestFactory.create(module, { logger: ["error", "warn"] })
+		? await NestFactory.create(module, { bufferLogs: true })
 		: undefined;
 	const app: INestApplicationContext =
 		http ??
-		(await NestFactory.createApplicationContext(module, {
-			logger: ["error", "warn"],
-		}));
+		(await NestFactory.createApplicationContext(module, { bufferLogs: true }));
+	// Nest's own messages go through the same pino (redaction, level from LOG_LEVEL).
+	app.useLogger(app.get(Logger));
 	// No server and (until the roles gain content) nothing else holding the event loop.
 	const keepAlive =
 		http === undefined ? setInterval(() => {}, 2 ** 30) : undefined;

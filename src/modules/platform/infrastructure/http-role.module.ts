@@ -1,5 +1,11 @@
-import { Injectable, Module } from "@nestjs/common";
+import {
+	Injectable,
+	type MiddlewareConsumer,
+	Module,
+	type NestModule,
+} from "@nestjs/common";
 import { ActiveRoles } from "./active-roles";
+import { CorrelationIdMiddleware } from "./correlation-id.middleware";
 import { RoleLifecycle } from "./role-lifecycle";
 
 @Injectable()
@@ -12,5 +18,9 @@ export class HttpRole extends RoleLifecycle {
 }
 
 /** ENABLE_HTTP. Controllers (health, metrics, wagering, wallet) join `controllers` from W5 on. */
-@Module({ providers: [HttpRole] })
-export class HttpRoleModule {}
+@Module({ providers: [HttpRole, CorrelationIdMiddleware] })
+export class HttpRoleModule implements NestModule {
+	configure(consumer: MiddlewareConsumer): void {
+		consumer.apply(CorrelationIdMiddleware).forRoutes("*");
+	}
+}

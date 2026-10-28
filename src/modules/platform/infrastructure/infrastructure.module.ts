@@ -1,6 +1,7 @@
 import { MikroOrmModule } from "@mikro-orm/nestjs";
 import { PostgreSqlDriver } from "@mikro-orm/postgresql";
 import { type DynamicModule, Module } from "@nestjs/common";
+import { LoggerModule } from "nestjs-pino";
 import type { AppConfig } from "../../../shared/config";
 import { InboxRepository } from "../../messaging/application/inbox-repository";
 import { OutboxRepository } from "../../messaging/application/outbox-repository";
@@ -17,9 +18,11 @@ import { LedgerEntrySchema } from "../../wallet/infrastructure/ledger-entry.sche
 import { MikroLedgerRepository } from "../../wallet/infrastructure/mikro-ledger.repository";
 import { MikroWalletRepository } from "../../wallet/infrastructure/mikro-wallet.repository";
 import { WalletSchema } from "../../wallet/infrastructure/wallet.schema";
+import { AppLogger } from "../application/log-fields";
 import { TransactionManager } from "../application/transaction-manager";
 import { ActiveRoles } from "./active-roles";
 import { MikroTransactionManager } from "./mikro-transaction-manager";
+import { createPinoLogger, PinoAppLogger } from "./pino-logger";
 import { APP_CONFIG } from "./tokens";
 import { TransactionRunner, TransactionTimeouts } from "./transaction-runner";
 
@@ -27,10 +30,16 @@ import { TransactionRunner, TransactionTimeouts } from "./transaction-runner";
 export class InfrastructureModule {}
 
 export function infrastructureModule(config: AppConfig): DynamicModule {
+	// One pino instance for the whole process: our own lines and Nest's framework lines.
+	const pinoLogger = createPinoLogger({ level: config.logLevel });
 	return {
 		module: InfrastructureModule,
 		global: true,
 		imports: [
+			// Only the bridge for Nest's own logger; access logging is ours (CorrelationIdMiddleware).
+			LoggerModule.forRoot({
+				pinoHttp: { logger: pinoLogger, autoLogging: false },
+			}),
 			MikroOrmModule.forRoot({
 				driver: PostgreSqlDriver,
 				clientUrl: config.databaseUrl,
@@ -47,6 +56,7 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 		],
 		providers: [
 			{ provide: APP_CONFIG, useValue: config },
+			{ provide: AppLogger, useValue: new PinoAppLogger(pinoLogger) },
 			{
 				provide: TransactionTimeouts,
 				useValue: new TransactionTimeouts(
@@ -75,6 +85,7 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 		],
 		exports: [
 			APP_CONFIG,
+			AppLogger,
 			ActiveRoles,
 			TransactionRunner,
 			TransactionManager,
