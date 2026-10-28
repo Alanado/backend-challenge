@@ -2,7 +2,10 @@ import { LockMode } from "@mikro-orm/core";
 import { Injectable } from "@nestjs/common";
 import { RowNotFoundError } from "../../platform/application/persistence-errors";
 import { MikroTransactionManager } from "../../platform/infrastructure/mikro-transaction-manager";
-import { WagerTransactionRepository } from "../application/wager-transaction-repository";
+import {
+	type PendingCandidate,
+	WagerTransactionRepository,
+} from "../application/wager-transaction-repository";
 import type { WagerTransaction } from "../domain/wager-transaction";
 import {
 	wagerTransactionToDomain,
@@ -133,6 +136,21 @@ export class MikroWagerTransactionRepository extends WagerTransactionRepository 
 			[now, now, providerId, externalTransactionId, walletId],
 		);
 		return rows.length;
+	}
+
+	async findDuePendingReferences(
+		now: Date,
+		limit: number,
+	): Promise<PendingCandidate[]> {
+		// Plain read, no row lock at all: taking the row first would invert the lock order (ADR-0013).
+		const rows = (await this.tm.current().execute(
+			`select id, wallet_id from wager_transactions
+			where status = 'PENDING_REFERENCE' and next_attempt_at <= ?
+			order by next_attempt_at, id
+			limit ?`,
+			[now, limit],
+		)) as Array<{ id: string; wallet_id: string }>;
+		return rows.map((row) => ({ id: row.id, walletId: row.wallet_id }));
 	}
 
 	private async findOneBy(

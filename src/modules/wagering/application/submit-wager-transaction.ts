@@ -3,12 +3,6 @@ import type { FaultInjector } from "../../../shared/fault-injector";
 import type { IdGenerator } from "../../../shared/ids";
 import { Money, type MoneyProps } from "../../../shared/money";
 import type { OutboxRepository } from "../../messaging/application/outbox-repository";
-import { WagerTransactionPendingReference } from "../../messaging/domain/events/wager-transaction-pending-reference";
-import { WagerTransactionProcessed } from "../../messaging/domain/events/wager-transaction-processed";
-import { WagerTransactionRejected } from "../../messaging/domain/events/wager-transaction-rejected";
-import { WalletBalanceChanged } from "../../messaging/domain/events/wallet-balance-changed";
-import type { IntegrationEvent } from "../../messaging/domain/integration-event";
-import { OutboxMessage } from "../../messaging/domain/outbox-message";
 import { LogContext } from "../../platform/application/log-context";
 import type { AppLogger } from "../../platform/application/log-fields";
 import type { MetricsPort } from "../../platform/application/metrics";
@@ -21,22 +15,10 @@ import {
 	VersionAssertionError,
 	type WalletRepository,
 } from "../../wallet/application/wallet-repository";
-import type { Wallet } from "../../wallet/domain/wallet";
-import {
-	LedgerDirection,
-	type WalletLedgerEntry,
-} from "../../wallet/domain/wallet-ledger-entry";
 import type { FailureCode } from "../domain/failure-code";
 import { payloadHash } from "../domain/payload-hash";
-import {
-	type ReferenceBackoffConfig,
-	referenceBackoff,
-} from "../domain/reference-backoff";
-import {
-	decideTransaction,
-	type ReferenceFacts,
-	type TransactionDecision,
-} from "../domain/transaction-policy";
+import { type ReferenceBackoffConfig } from "../domain/reference-backoff";
+import { decideTransaction } from "../domain/transaction-policy";
 import { WagerTransaction } from "../domain/wager-transaction";
 import { WagerTransactionKind } from "../domain/wager-transaction-kind";
 import { WagerTransactionStatus } from "../domain/wager-transaction-status";
@@ -44,6 +26,7 @@ import {
 	ExternalTransactionIdConflictError,
 	IdempotencyKeyPayloadMismatchError,
 } from "./errors";
+import { TransactionConclusion } from "./transaction-conclusion";
 import type { WagerTransactionRepository } from "./wager-transaction-repository";
 
 export interface SubmitWagerTransactionCommand {
@@ -111,7 +94,11 @@ export function toResult(
  * Nothing in this class touches `wager_transactions` before `findByIdForUpdate` returns.
  */
 export class SubmitWagerTransaction {
-	constructor(private readonly deps: SubmitWagerTransactionDeps) {}
+	private readonly conclusion: TransactionConclusion;
+
+	constructor(private readonly deps: SubmitWagerTransactionDeps) {
+		this.conclusion = new TransactionConclusion(deps);
+	}
 
 	async execute(
 		command: SubmitWagerTransactionCommand,
@@ -228,9 +215,16 @@ export class SubmitWagerTransaction {
 			return this.resolveDuplicate(command, hash);
 		}
 
-		const reference = await this.resolveReference(transaction);
+		const reference = await this.conclusion.resolveReference(transaction);
 		const decision = decideTransaction({ wallet, transaction, reference });
-		await this.conclude(decision, wallet, transaction, reference, context, now);
+		await this.conclusion.conclude(
+			decision,
+			wallet,
+			transaction,
+			reference,
+			context.correlationId,
+			now,
+		);
 
 		// After every write, before the commit (N6).
 		this.deps.faults.check("fail-mid-transaction");
@@ -273,121 +267,6 @@ export class SubmitWagerTransaction {
 			throw new IdempotencyKeyPayloadMismatchError();
 		}
 		return toResult(stored, true);
-	}
-
-	/**
-	 * Looks the reference up by (provider, external id) with NO wallet filter (ADR-0013), after the
-	 * wallet lock: reversals on this wallet are serialized, so "already reversed" cannot go stale.
-	 */
-	private async resolveReference(
-		transaction: WagerTransaction,
-	): Promise<ReferenceFacts | undefined> {
-		const externalId = transaction.referenceExternalTransactionId;
-		if (externalId === undefined) return undefined;
-		const { transactions } = this.deps;
-		const referenced = await transactions.findByExternalId(
-			transaction.providerId,
-			externalId,
-		);
-		if (referenced === undefined) return undefined;
-		// The partial unique index (ADR-0010) is the safety net behind this check.
-		const alreadyReversed =
-			referenced.status === WagerTransactionStatus.Processed &&
-			(await transactions.existsProcessedReversalOf(referenced.id));
-		return { transaction: referenced, alreadyReversed };
-	}
-
-	private async conclude(
-		decision: TransactionDecision,
-		wallet: Wallet,
-		transaction: WagerTransaction,
-		reference: ReferenceFacts | undefined,
-		context: SubmissionContext,
-		now: Date,
-	): Promise<void> {
-		const { transactions, outbox } = this.deps;
-		const events: IntegrationEvent<unknown>[] = [];
-		const eventContext = () => ({
-			eventId: this.deps.ids.next(),
-			correlationId: context.correlationId,
-			occurredAt: now,
-		});
-
-		switch (decision.type) {
-			case "REJECT": {
-				transaction.reject(decision.failureCode, wallet.balance);
-				events.push(WagerTransactionRejected.from(transaction, eventContext()));
-				break;
-			}
-			case "PENDING_REFERENCE": {
-				const delayMs = referenceBackoff(
-					0,
-					this.deps.referenceBackoff,
-					this.deps.random,
-				);
-				transaction.markPendingReference(
-					new Date(now.getTime() + delayMs),
-					wallet.balance,
-				);
-				events.push(
-					WagerTransactionPendingReference.from(transaction, eventContext()),
-				);
-				break;
-			}
-			case "APPLY": {
-				const entry = await this.moveBalance(
-					decision.direction,
-					wallet,
-					transaction,
-					now,
-				);
-				transaction.markProcessed(
-					reference?.transaction.id,
-					now,
-					wallet.balance,
-				);
-				events.push(
-					WagerTransactionProcessed.from(transaction, eventContext()),
-				);
-				if (entry !== undefined) {
-					events.push(WalletBalanceChanged.from(entry, eventContext()));
-				}
-				break;
-			}
-		}
-
-		await transactions.update(transaction, now);
-		if (transaction.status === WagerTransactionStatus.Processed) {
-			// Same transaction, restricted to the locked wallet (ADR-0007): the pending ones may retry now.
-			await transactions.wakeDependents(
-				transaction.providerId,
-				transaction.externalTransactionId,
-				wallet.id,
-				now,
-			);
-		}
-		for (const event of events) {
-			await outbox.enqueue(OutboxMessage.enqueue(event, wallet.id));
-		}
-	}
-
-	/** Debit/credit the locked wallet and append the ledger entry; `undefined` direction = LOSS (no movement). */
-	private async moveBalance(
-		direction: LedgerDirection | undefined,
-		wallet: Wallet,
-		transaction: WagerTransaction,
-		now: Date,
-	): Promise<WalletLedgerEntry | undefined> {
-		if (direction === undefined) return undefined;
-		const expectedVersion = wallet.version;
-		const entryId = this.deps.ids.next();
-		const entry =
-			direction === LedgerDirection.Debit
-				? wallet.debit(transaction.money, transaction.id, now, entryId)
-				: wallet.credit(transaction.money, transaction.id, now, entryId);
-		await this.deps.wallets.updateBalance(wallet, expectedVersion);
-		await this.deps.ledger.append(entry);
-		return entry;
 	}
 
 	private countFailure(error: unknown, context: SubmissionContext): void {

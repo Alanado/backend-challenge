@@ -56,7 +56,7 @@ Resultados do spike: ver [adr/0002-spike.md](adr/0002-spike.md).
 - [ ] **T-041** Porta `MessageConsumer` + poller SQS (grupos em série, concorrência entre grupos, visibilidade, timeout). *(RF-MSG-01..04/08)*
 - [ ] **T-042a** Inbox (ramo SQS do caso de uso, antes do lock da wallet) + classificação de erros (negócio/transitório/infra/permanente). *(RF-MSG-01/02/04, RF-IDP-07; TST-U-11, TST-I-11)*
 - [ ] **T-042b** DLQ explícita para permanentes + exaustão (`ApproximateReceiveCount >= 8` → `FAILED` + DLQ + delete). *(RF-MSG-04/05/08; TST-I-12)*
-- [ ] **T-043** Worker de `PENDING_REFERENCE` (ordem wallet→linha, revalidação, acordar dependentes). *(RF-REF-*; TST-I-10, C-07)*
+- [x] **T-043** Worker de `PENDING_REFERENCE` (ordem wallet→linha, revalidação, acordar dependentes). *(RF-REF-*; TST-I-10, C-07)*
 - [ ] **T-044** Circuit breaker de infraestrutura. *(RF-MSG-07; TST-I-20)*
 - [x] **T-045** Seam de falha (`TEST_FAULT`) com recusa em produção. *(03-messaging §9)*
 - [ ] **T-046** Testes multi-processo: C-04, C-05, C-08, C-10 + `Bun.spawn` de instâncias.

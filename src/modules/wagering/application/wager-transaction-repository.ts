@@ -34,4 +34,17 @@ export abstract class WagerTransactionRepository {
 		walletId: string,
 		now: Date,
 	): Promise<number>;
+	/**
+	 * Candidates for the pending-reference worker: PENDING_REFERENCE and due at `now`, oldest due
+	 * first. NO lock (ADR-0013): the worker locks the wallet first and revalidates afterwards.
+	 */
+	abstract findDuePendingReferences(
+		now: Date,
+		limit: number,
+	): Promise<PendingCandidate[]>;
+}
+
+export interface PendingCandidate {
+	id: string;
+	walletId: string;
 }
