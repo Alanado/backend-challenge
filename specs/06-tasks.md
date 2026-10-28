@@ -24,7 +24,7 @@ Definição de pronto de uma tarefa: testes da tarefa verdes, `bun run typecheck
 - [x] **T-013** `payloadHash` canônico e `IdempotencyKey`. *(RF-IDP-05; TST-U-06)*
 - [x] **T-014** `InboxMessage`, `OutboxMessage` (backoff, `isDue`), `IntegrationEvent` + 5 eventos. *(RF-OUT-07; TST-U-08, U-09)*
 - [x] **T-015** Políticas de referência/reversão (puras): kind permitido, mismatch, valor, já revertida, `PENDING_REFERENCE`. *(RF-TXN-06..09, 11; TST-U-05)*
-- [ ] **T-016** Teste de arquitetura de imports. *(RF-MNY-05; TST-U-13)*
+- [x] **T-016** Teste de arquitetura de imports. *(RF-MNY-05; TST-U-13)*
 
 ## M2 — Persistência (Dia 1)
 
