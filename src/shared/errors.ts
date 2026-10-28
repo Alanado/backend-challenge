@@ -39,3 +39,7 @@ export class InvalidReferenceRequirementError extends DomainError {
 export class LedgerDirectionUnavailableError extends DomainError {
 	readonly code = "LEDGER_DIRECTION_UNAVAILABLE";
 }
+
+export class InvalidIdempotencyKeyError extends DomainError {
+	readonly code = "INVALID_IDEMPOTENCY_KEY";
+}
