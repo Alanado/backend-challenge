@@ -1,5 +1,6 @@
 import {
 	GetQueueAttributesCommand,
+	ReceiveMessageCommand,
 	SendMessageCommand,
 	type SQSClient,
 } from "@aws-sdk/client-sqs";
@@ -109,4 +110,39 @@ export function deferred<T = void>() {
 		resolve = r;
 	});
 	return { promise, resolve };
+}
+
+export interface DeadLetter {
+	body: string;
+	groupId: string;
+	deduplicationId: string;
+	errorCode: string | undefined;
+	reason: string | undefined;
+}
+
+/**
+ * What the DLQ holds right now. It peeks (`VisibilityTimeout: 0`), so it can be called again and
+ * again, and returns whatever one receive yields: DLQs in tests hold a handful of messages.
+ */
+export async function peekDeadLetters(
+	sqs: SQSClient,
+	queueUrl: string,
+): Promise<DeadLetter[]> {
+	const response = await sqs.send(
+		new ReceiveMessageCommand({
+			QueueUrl: queueUrl,
+			MaxNumberOfMessages: 10,
+			VisibilityTimeout: 0,
+			WaitTimeSeconds: 0,
+			MessageAttributeNames: ["All"],
+			MessageSystemAttributeNames: ["MessageGroupId", "MessageDeduplicationId"],
+		}),
+	);
+	return (response.Messages ?? []).map((m) => ({
+		body: m.Body ?? "",
+		groupId: m.Attributes?.MessageGroupId ?? "",
+		deduplicationId: m.Attributes?.MessageDeduplicationId ?? "",
+		errorCode: m.MessageAttributes?.errorCode?.StringValue,
+		reason: m.MessageAttributes?.reason?.StringValue,
+	}));
 }

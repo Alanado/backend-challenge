@@ -88,6 +88,23 @@ export interface SubmitWagerTransactionDeps {
 	random?: () => number;
 }
 
+/** The business hash of a command (04-api §6): what makes "the same key, another payload" detectable. */
+export function commandPayloadHash(
+	command: SubmitWagerTransactionCommand,
+): string {
+	return payloadHash({
+		providerId: command.providerId,
+		externalTransactionId: command.externalTransactionId,
+		playerId: command.playerId,
+		walletId: command.walletId,
+		roundId: command.roundId,
+		gameId: command.gameId,
+		kind: command.kind,
+		money: Money.from(command.money),
+		referenceExternalTransactionId: command.referenceExternalTransactionId,
+	});
+}
+
 export function toResult(
 	transaction: WagerTransaction,
 	idempotentReplay: boolean,
@@ -130,17 +147,7 @@ export class SubmitWagerTransaction {
 			walletId: command.walletId,
 		});
 		// Before any database access (02-design §5).
-		const hash = payloadHash({
-			providerId: command.providerId,
-			externalTransactionId: command.externalTransactionId,
-			playerId: command.playerId,
-			walletId: command.walletId,
-			roundId: command.roundId,
-			gameId: command.gameId,
-			kind: command.kind,
-			money: Money.from(command.money),
-			referenceExternalTransactionId: command.referenceExternalTransactionId,
-		});
+		const hash = commandPayloadHash(command);
 
 		let result: WagerTransactionResult;
 		try {

@@ -50,12 +50,19 @@ export class RecordingMetrics extends MetricsPort {
 	readonly lockConflicts: LockConflictType[] = [];
 	readonly durations: Array<{ outcome: string; kind: string }> = [];
 	readonly retries: RetryComponent[] = [];
+	readonly dlq: string[] = [];
+	readonly breakerStates: boolean[] = [];
 	outboxLagSeconds = 0;
 	outboxPublishFailures = 0;
 
-	dlqMessage(): void {}
 	reconciliationDivergence(): void {}
-	setCircuitBreakerOpen(): void {}
+
+	dlqMessage(reason: string): void {
+		this.dlq.push(reason);
+	}
+	setCircuitBreakerOpen(open: boolean): void {
+		this.breakerStates.push(open);
+	}
 
 	retry(component: RetryComponent): void {
 		this.retries.push(component);

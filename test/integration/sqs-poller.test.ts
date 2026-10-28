@@ -1,6 +1,7 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import type { SQSClient } from "@aws-sdk/client-sqs";
 import type { MessageHandler } from "../../src/modules/messaging/application/message-consumer";
+import { SqsDeadLetterQueue } from "../../src/modules/messaging/infrastructure/sqs-dead-letter-queue";
 import { SqsMessageConsumer } from "../../src/modules/messaging/infrastructure/sqs-message-consumer";
 import {
 	createFaultInjector,
@@ -10,11 +11,12 @@ import { newSqsClient } from "../support/event-consumer";
 import { eventually } from "../support/eventually";
 import {
 	deferred,
+	peekDeadLetters,
 	queueDepth,
 	RecordingHandler,
 	sendMessage,
 } from "../support/sqs-poller";
-import { RecordingLogger } from "../support/submit-harness";
+import { RecordingLogger, RecordingMetrics } from "../support/submit-harness";
 import { createSuiteQueues, type SuiteQueues } from "../support/suite-queues";
 
 const sqs = newSqsClient();
@@ -34,6 +36,7 @@ interface Rig {
 	send(body: string, group: string): Promise<void>;
 	/** Commands the consumer sent, in order (a spy over the real client). */
 	commands: Array<{ name: string; input: Record<string, unknown> }>;
+	metrics: RecordingMetrics;
 }
 
 async function createRig(
@@ -62,6 +65,7 @@ async function createRig(
 		});
 		return send(command, ...rest);
 	};
+	const metrics = new RecordingMetrics();
 	let crashed = false;
 	const consumer = new SqsMessageConsumer({
 		client,
@@ -78,6 +82,8 @@ async function createRig(
 			},
 		),
 		logger: new RecordingLogger(),
+		metrics,
+		deadLetter: new SqsDeadLetterQueue({ client, queueName: queues.dlq.name }),
 	});
 	consumer.register(handler);
 	cleanups.push(async () => {
@@ -89,6 +95,7 @@ async function createRig(
 		queues,
 		consumer,
 		commands,
+		metrics,
 		send: (body, group) => sendMessage(sqs, queues.main.url, body, group),
 	};
 }
@@ -365,5 +372,49 @@ describe("X-POLLER fetching and stopping", () => {
 
 		expect(recorder.calls).toHaveLength(0);
 		expect(await queueDepth(sqs, rig.queues.main.url)).toBe(1);
+	});
+});
+
+describe("X-POLLER dead-lettering", () => {
+	test("X-POLLER-14 a dead-letter outcome copies the message to the DLQ with its group and deduplication id, then deletes it, and the next message of the group carries on", async () => {
+		const recorder = new RecordingHandler(async (message) =>
+			message.body === "poison"
+				? { kind: "dead-letter", errorCode: "BAD_THING", reason: "bad_thing" }
+				: { kind: "ack" },
+		);
+		const rig = await createRig(recorder.handle);
+		await sendMessage(
+			sqs,
+			rig.queues.main.url,
+			"poison",
+			"wallet-a",
+			"dedup-poison",
+		);
+		await rig.send("healthy", "wallet-a");
+
+		rig.consumer.start();
+		await eventually(() =>
+			expect(recorder.calls.map((c) => c.body)).toEqual(["poison", "healthy"]),
+		);
+		await eventually(async () =>
+			expect(await queueDepth(sqs, rig.queues.main.url)).toBe(0),
+		);
+
+		const dead = await peekDeadLetters(sqs, rig.queues.dlq.url);
+		expect(dead).toEqual([
+			{
+				body: "poison",
+				groupId: "wallet-a",
+				deduplicationId: "dedup-poison",
+				errorCode: "BAD_THING",
+				reason: "bad_thing",
+			},
+		]);
+		expect(rig.metrics.dlq).toEqual(["bad_thing"]);
+		// The copy was sent before the original was deleted.
+		const names = rig.commands.map((c) => c.name);
+		expect(names.indexOf("SendMessageCommand")).toBeLessThan(
+			names.indexOf("DeleteMessageCommand"),
+		);
 	});
 });

@@ -10,24 +10,37 @@ import {
 	classifyMessageError,
 	visibilityBackoffSeconds,
 } from "./classify-message-error";
+import type { RecordExhaustedTransaction } from "./record-exhausted-transaction";
 import type {
 	SubmitWagerTransaction,
 	WagerTransactionResult,
 } from "./submit-wager-transaction";
-import { parseWagerTransactionMessage } from "./wager-transaction-message";
+import {
+	parseWagerTransactionMessage,
+	type WagerTransactionMessage,
+} from "./wager-transaction-message";
+
+/** `errorCode` and `reason` of a message dead-lettered for running out of attempts. */
+export const ATTEMPTS_EXHAUSTED = {
+	errorCode: "PROCESSING_ATTEMPTS_EXHAUSTED",
+	reason: "attempts_exhausted",
+} as const;
 
 /** What became of one delivery, before the consumer turns it into queue operations. */
 export type MessageProcessing =
-	| { kind: "ack"; result: WagerTransactionResult }
+	| { kind: "ack"; result?: WagerTransactionResult | undefined }
 	| { kind: "retry"; delaySeconds: number; reason: string }
 	| { kind: "release"; reason: string }
 	| { kind: "permanent"; errorCode: string; reason: string };
 
 export interface WagerTransactionMessageHandlerDeps {
 	submit: SubmitWagerTransaction;
+	exhausted: RecordExhaustedTransaction;
 	metrics: MetricsPort;
 	logger: AppLogger;
 	backoff: { baseS: number; capS: number };
+	/** SQS_MAX_RECEIVE: the delivery that reaches it is the last one. */
+	maxReceive: number;
 }
 
 /**
@@ -47,8 +60,9 @@ export class WagerTransactionMessageHandler {
 		return LogContext.run(
 			{ correlationId: message.id, messageId: message.id },
 			async () => {
+				let parsed: WagerTransactionMessage | undefined;
 				try {
-					const parsed = parseWagerTransactionMessage(message.body);
+					parsed = parseWagerTransactionMessage(message.body);
 					LogContext.set({
 						correlationId: parsed.messageId,
 						messageId: parsed.messageId,
@@ -61,17 +75,27 @@ export class WagerTransactionMessageHandler {
 					});
 					return { kind: "ack", result };
 				} catch (error) {
-					return this.fail(error, message);
+					return this.fail(error, message, parsed);
 				}
 			},
 		);
 	}
 
-	private fail(error: unknown, message: InboundMessage): MessageProcessing {
+	private async fail(
+		error: unknown,
+		message: InboundMessage,
+		parsed: WagerTransactionMessage | undefined,
+	): Promise<MessageProcessing> {
 		const classified = classifyMessageError(error);
 		const { logger, metrics } = this.deps;
 		switch (classified.kind) {
 			case "transient": {
+				if (
+					parsed !== undefined &&
+					message.receiveCount >= this.deps.maxReceive
+				) {
+					return this.exhaust(parsed, classified.reason);
+				}
 				metrics.retry("consumer");
 				const delaySeconds = visibilityBackoffSeconds(
 					message.receiveCount,
@@ -96,9 +120,32 @@ export class WagerTransactionMessageHandler {
 	}
 
 	/**
-	 * T-042b sends `permanent` to the DLQ. Until then it is only handed back, so nothing is lost
-	 * and nothing is acknowledged.
+	 * Last delivery and still failing: record FAILED if the database answers and the wallet can be
+	 * locked, then dead-letter. A transaction that already has a result (an earlier attempt
+	 * succeeded and only its ack was lost) is just acked.
 	 */
+	private async exhaust(
+		parsed: WagerTransactionMessage,
+		lastReason: string,
+	): Promise<MessageProcessing> {
+		const { logger } = this.deps;
+		try {
+			const recorded = await this.deps.exhausted.execute(parsed.command, {
+				messageId: parsed.messageId,
+				messageHash: parsed.bodyHash,
+			});
+			if (recorded === "already-handled") {
+				logger.info("message was already handled, nothing to give up on");
+				return { kind: "ack" };
+			}
+		} catch (error) {
+			// No FAILED and no event without a database that answers: the DLQ is then the record.
+			logger.error("could not record the exhausted transaction", {}, error);
+		}
+		logger.warn("attempts exhausted", { reason: lastReason });
+		return { kind: "permanent", ...ATTEMPTS_EXHAUSTED };
+	}
+
 	private toOutcome(processing: MessageProcessing): MessageOutcome {
 		switch (processing.kind) {
 			case "ack":
@@ -106,8 +153,13 @@ export class WagerTransactionMessageHandler {
 			case "retry":
 				return { kind: "retry", delaySeconds: processing.delaySeconds };
 			case "release":
-			case "permanent":
 				return { kind: "release" };
+			case "permanent":
+				return {
+					kind: "dead-letter",
+					errorCode: processing.errorCode,
+					reason: processing.reason,
+				};
 		}
 	}
 }

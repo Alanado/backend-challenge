@@ -16,12 +16,15 @@ export interface InboundMessage {
  *  - `ack`: the effect is committed; delete the message.
  *  - `retry`: a transient failure of this message; keep it, invisible for `delaySeconds`.
  *  - `release`: nothing was decided (infrastructure down, timeout); visible again at once.
- * A `retry` or `release` also hands back the rest of the group's messages in the same batch.
+ *  - `dead-letter`: it will never succeed; send it to the DLQ, then delete it.
+ * A `retry` or `release` also hands back the rest of the group's messages in the same batch;
+ * a `dead-letter` does not: the messages behind it carry on.
  */
 export type MessageOutcome =
 	| { kind: "ack" }
 	| { kind: "retry"; delaySeconds: number }
-	| { kind: "release" };
+	| { kind: "release" }
+	| { kind: "dead-letter"; errorCode: string; reason: string };
 
 export type MessageHandler = (
 	message: InboundMessage,
@@ -37,4 +40,21 @@ export abstract class MessageConsumer {
 	abstract start(): void;
 	/** Stops fetching and resolves once the handlers in flight have finished. */
 	abstract stop(): Promise<void>;
+}
+
+export interface DeadLetterFailure {
+	errorCode: string;
+	reason: string;
+}
+
+/**
+ * Port of the dead-letter queue. `send` resolves once the copy is durably in the DLQ; the
+ * consumer deletes the original only after that. The two steps are not atomic: a crash between
+ * them duplicates the message in the DLQ, which is accepted (03-messaging §3.3).
+ */
+export abstract class DeadLetterQueue {
+	abstract send(
+		message: InboundMessage,
+		failure: DeadLetterFailure,
+	): Promise<void>;
 }

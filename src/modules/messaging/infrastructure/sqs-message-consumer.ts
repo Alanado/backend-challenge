@@ -8,7 +8,9 @@ import {
 } from "@aws-sdk/client-sqs";
 import type { FaultInjector } from "../../../shared/fault-injector";
 import type { AppLogger } from "../../platform/application/log-fields";
+import type { MetricsPort } from "../../platform/application/metrics";
 import {
+	type DeadLetterQueue,
 	type InboundMessage,
 	MessageConsumer,
 	type MessageHandler,
@@ -32,6 +34,8 @@ export interface SqsMessageConsumerOptions {
 	waitTimeSeconds: number;
 	faults: FaultInjector;
 	logger: AppLogger;
+	metrics: MetricsPort;
+	deadLetter: DeadLetterQueue;
 }
 
 interface Delivery {
@@ -166,6 +170,16 @@ export class SqsMessageConsumer extends MessageConsumer {
 					await this.setVisibility(delivery, 0);
 					await this.giveBack(rest);
 					return;
+				case "dead-letter":
+					// The DLQ copy comes first, the delete after it. If the copy fails the original
+					// stays (and blocks its group until it returns): losing it would be worse.
+					if (!(await this.sendToDeadLetter(delivery, outcome))) {
+						await this.setVisibility(delivery, 0);
+						await this.giveBack(rest);
+						return;
+					}
+					await this.acknowledge(delivery);
+					break;
 			}
 		}
 	}
@@ -202,7 +216,30 @@ export class SqsMessageConsumer extends MessageConsumer {
 		}
 	}
 
-	/** The one place a message is deleted: after the handler said `ack`. */
+	private async sendToDeadLetter(
+		delivery: Delivery,
+		failure: { errorCode: string; reason: string },
+	): Promise<boolean> {
+		try {
+			await this.options.deadLetter.send(delivery.message, failure);
+		} catch (error) {
+			this.options.logger.error(
+				"sending a message to the DLQ failed",
+				{ messageId: delivery.message.id, errorCode: failure.errorCode },
+				error,
+			);
+			return false;
+		}
+		this.options.metrics.dlqMessage(failure.reason);
+		this.options.logger.warn("message sent to the DLQ", {
+			messageId: delivery.message.id,
+			errorCode: failure.errorCode,
+			reason: failure.reason,
+		});
+		return true;
+	}
+
+	/** Deletes the message: after the handler said `ack`, or after its copy reached the DLQ. */
 	private async acknowledge(delivery: Delivery): Promise<void> {
 		try {
 			await this.options.client.send(

@@ -1,12 +1,15 @@
 import type { SQSClient } from "@aws-sdk/client-sqs";
 import type { Client } from "pg";
 import type { MessageHandler } from "../../src/modules/messaging/application/message-consumer";
+import { SqsDeadLetterQueue } from "../../src/modules/messaging/infrastructure/sqs-dead-letter-queue";
 import { SqsMessageConsumer } from "../../src/modules/messaging/infrastructure/sqs-message-consumer";
+import { RecordExhaustedTransaction } from "../../src/modules/wagering/application/record-exhausted-transaction";
 import { WagerTransactionMessageHandler } from "../../src/modules/wagering/application/wager-transaction-message-handler";
 import {
 	type CrashFn,
 	createFaultInjector,
 } from "../../src/shared/fault-injector";
+import { Uuidv7Generator } from "../../src/shared/ids";
 import { openWalletWithOpening } from "./domain-builders";
 import { newSqsClient } from "./event-consumer";
 import { uniqueId } from "./ids";
@@ -85,6 +88,10 @@ export interface ConsumerOptions {
 	persistence?: PersistenceOptions;
 	handlerTimeoutMs?: number;
 	backoff?: { baseS: number; capS: number };
+	/** SQS_MAX_RECEIVE (default 8, as in production). */
+	maxReceive?: number;
+	/** `TEST_FAULT` of the USE CASE (e.g. `fail-mid-transaction`), as opposed to `crash`. */
+	useCaseFault?: string;
 	waitTimeSeconds?: number;
 	concurrency?: number;
 	/** Wraps the registered handler (e.g. to count or to read the processing). */
@@ -95,6 +102,7 @@ export interface ConsumerRig {
 	p: Persistence;
 	harness: SubmitHarness;
 	handler: WagerTransactionMessageHandler;
+	exhausted: RecordExhaustedTransaction;
 	consumer: SqsMessageConsumer;
 	client: SQSClient;
 	/** Commands this consumer sent to SQS, in order (a spy over the real client). */
@@ -109,16 +117,24 @@ export async function createConsumerRig(
 	o: ConsumerOptions = {},
 ): Promise<ConsumerRig> {
 	const p = await createPersistence(db.url, o.persistence);
-	const harness = createSubmitHarness(p, {
-		...(o.crash === undefined
-			? {}
-			: { faults: createFaultInjector(o.crash.point, o.crash.fn) }),
+	const harness = createSubmitHarness(p, { fault: o.useCaseFault ?? "" });
+	const exhausted = new RecordExhaustedTransaction({
+		tm: p.tm,
+		wallets: p.wallets,
+		transactions: p.transactions,
+		outbox: p.outbox,
+		inbox: p.inbox,
+		clock: harness.clock,
+		ids: new Uuidv7Generator(),
+		metrics: harness.metrics,
 	});
 	const handler = new WagerTransactionMessageHandler({
 		submit: harness.submit,
+		exhausted,
 		metrics: harness.metrics,
 		logger: harness.logger,
 		backoff: o.backoff ?? { baseS: 1, capS: 4 },
+		maxReceive: o.maxReceive ?? 8,
 	});
 	const client = newSqsClient();
 	const commands: ConsumerRig["commands"] = [];
@@ -142,12 +158,18 @@ export async function createConsumerRig(
 		// The crash hook belongs to the consumer's ack step; the use case has its own injector.
 		faults: createFaultInjector(o.crash?.point ?? "", o.crash?.fn),
 		logger: harness.logger,
+		metrics: harness.metrics,
+		deadLetter: new SqsDeadLetterQueue({
+			client,
+			queueName: queues.dlq.name,
+		}),
 	});
 	consumer.register(o.wrap?.(handler) ?? handler.handle);
 	return {
 		p,
 		harness,
 		handler,
+		exhausted,
 		consumer,
 		client,
 		commands,
