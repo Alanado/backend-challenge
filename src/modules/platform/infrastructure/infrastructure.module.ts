@@ -18,6 +18,7 @@ import { MikroLedgerRepository } from "../../wallet/infrastructure/mikro-ledger.
 import { MikroWalletRepository } from "../../wallet/infrastructure/mikro-wallet.repository";
 import { WalletSchema } from "../../wallet/infrastructure/wallet.schema";
 import { TransactionManager } from "../application/transaction-manager";
+import { ActiveRoles } from "./active-roles";
 import { MikroTransactionManager } from "./mikro-transaction-manager";
 import { APP_CONFIG } from "./tokens";
 import { TransactionRunner, TransactionTimeouts } from "./transaction-runner";
@@ -54,6 +55,7 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 				),
 			},
 			TransactionRunner,
+			ActiveRoles,
 			MikroTransactionManager,
 			MikroWalletRepository,
 			MikroLedgerRepository,
@@ -73,6 +75,7 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 		],
 		exports: [
 			APP_CONFIG,
+			ActiveRoles,
 			TransactionRunner,
 			TransactionManager,
 			WalletRepository,
