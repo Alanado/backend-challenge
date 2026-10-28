@@ -4,6 +4,7 @@ import type { Clock } from "../../../shared/clock";
 import type { AppConfig } from "../../../shared/config";
 import { createFaultInjector } from "../../../shared/fault-injector";
 import type { IdGenerator } from "../../../shared/ids";
+import { InfrastructureProbe } from "../../platform/application/infrastructure-probe";
 import { AppLogger } from "../../platform/application/log-fields";
 import { MetricsPort } from "../../platform/application/metrics";
 import { TransactionManager } from "../../platform/application/transaction-manager";
@@ -20,6 +21,7 @@ import { WagerTransactionMessageHandler } from "../../wagering/application/wager
 import { WagerTransactionRepository } from "../../wagering/application/wager-transaction-repository";
 import { submitWagerTransactionProvider } from "../../wagering/infrastructure/submit-wager-transaction.provider";
 import { WalletRepository } from "../../wallet/application/wallet-repository";
+import { CircuitBreaker } from "../application/circuit-breaker";
 import { InboxRepository } from "../application/inbox-repository";
 import { MessageConsumer } from "../application/message-consumer";
 import { OutboxRepository } from "../application/outbox-repository";
@@ -54,11 +56,29 @@ export class ConsumerRole extends RoleLifecycle {
 	providers: [
 		submitWagerTransactionProvider,
 		{
+			provide: CircuitBreaker,
+			useFactory: (
+				config: AppConfig,
+				clock: Clock,
+				probe: InfrastructureProbe,
+				metrics: MetricsPort,
+			) =>
+				new CircuitBreaker({
+					clock,
+					cooldownMinMs: config.breaker.cooldownMinMs,
+					cooldownMaxMs: config.breaker.cooldownMaxMs,
+					probe: () => probe.ping(),
+					metrics,
+				}),
+			inject: [APP_CONFIG, CLOCK, InfrastructureProbe, MetricsPort],
+		},
+		{
 			provide: MessageConsumer,
 			useFactory: (
 				config: AppConfig,
 				metrics: MetricsPort,
 				logger: AppLogger,
+				breaker: CircuitBreaker,
 			) => {
 				const client = new SQSClient({
 					region: config.sqs.region,
@@ -82,9 +102,10 @@ export class ConsumerRole extends RoleLifecycle {
 						client,
 						queueName: config.sqs.dlqName,
 					}),
+					gate: breaker,
 				});
 			},
-			inject: [APP_CONFIG, MetricsPort, AppLogger],
+			inject: [APP_CONFIG, MetricsPort, AppLogger, CircuitBreaker],
 		},
 		{
 			provide: RecordExhaustedTransaction,
@@ -127,12 +148,14 @@ export class ConsumerRole extends RoleLifecycle {
 				exhausted: RecordExhaustedTransaction,
 				metrics: MetricsPort,
 				logger: AppLogger,
+				breaker: CircuitBreaker,
 			) =>
 				new WagerTransactionMessageHandler({
 					submit,
 					exhausted,
 					metrics,
 					logger,
+					infrastructure: breaker,
 					backoff: {
 						baseS: config.sqs.backoffBaseS,
 						capS: config.sqs.backoffCapS,
@@ -145,6 +168,7 @@ export class ConsumerRole extends RoleLifecycle {
 				RecordExhaustedTransaction,
 				MetricsPort,
 				AppLogger,
+				CircuitBreaker,
 			],
 		},
 		{

@@ -9,6 +9,7 @@ import {
 import type { FaultInjector } from "../../../shared/fault-injector";
 import type { AppLogger } from "../../platform/application/log-fields";
 import type { MetricsPort } from "../../platform/application/metrics";
+import type { ReceiveGate } from "../application/circuit-breaker";
 import {
 	type DeadLetterQueue,
 	type InboundMessage,
@@ -21,6 +22,8 @@ import {
 const RECEIVE_BATCH = 10;
 /** Pause after a failed ReceiveMessage (network, missing queue), so a dead broker is not hammered. */
 const RECEIVE_ERROR_PAUSE_MS = 1000;
+/** How often a closed gate is asked again whether fetching may resume. */
+const GATE_POLL_MS = 50;
 
 export interface SqsMessageConsumerOptions {
 	client: SQSClient;
@@ -36,6 +39,8 @@ export interface SqsMessageConsumerOptions {
 	logger: AppLogger;
 	metrics: MetricsPort;
 	deadLetter: DeadLetterQueue;
+	/** The circuit breaker: while it does not allow requests nothing is fetched or handled. */
+	gate?: ReceiveGate;
 }
 
 interface Delivery {
@@ -88,6 +93,11 @@ export class SqsMessageConsumer extends MessageConsumer {
 
 	private async run(): Promise<void> {
 		while (!this.stopping) {
+			// An open breaker stops the fetching: a message not received loses no attempt.
+			if (this.options.gate && !(await this.options.gate.allowRequests())) {
+				await this.pause(GATE_POLL_MS);
+				continue;
+			}
 			let deliveries: Delivery[];
 			try {
 				deliveries = await this.receive();
@@ -151,7 +161,8 @@ export class SqsMessageConsumer extends MessageConsumer {
 
 	private async processGroup(group: Delivery[]): Promise<void> {
 		for (const [index, delivery] of group.entries()) {
-			if (this.stopping) {
+			// Stopping, or the breaker opened since the batch was fetched: hand the rest back untouched.
+			if (this.stopping || this.options.gate?.isOpen()) {
 				await this.giveBack(group.slice(index));
 				return;
 			}

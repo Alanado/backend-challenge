@@ -35,3 +35,28 @@ export async function eventually<T>(
 		},
 	);
 }
+
+/**
+ * Negative assertion: `check` must hold at every sample for `durationMs`. The window is fixed on
+ * purpose (it observes that something does NOT happen); `check` throws to fail, and the error
+ * names the elapsed time. Use `eventually` for everything that is supposed to happen.
+ */
+export async function holdsFor(
+	durationMs: number,
+	check: () => void | Promise<void>,
+	intervalMs = 100,
+): Promise<void> {
+	const start = performance.now();
+	do {
+		try {
+			await check();
+		} catch (err) {
+			const elapsed = Math.round(performance.now() - start);
+			const detail = err instanceof Error ? err.message : String(err);
+			throw new Error(`stopped holding after ${elapsed}ms: ${detail}`, {
+				cause: err,
+			});
+		}
+		await new Promise((resolve) => setTimeout(resolve, intervalMs));
+	} while (performance.now() - start < durationMs);
+}

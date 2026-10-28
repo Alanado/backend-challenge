@@ -22,11 +22,13 @@ import { LedgerIntegrityReader } from "../../wallet/infrastructure/ledger-integr
 import { MikroLedgerRepository } from "../../wallet/infrastructure/mikro-ledger.repository";
 import { MikroWalletRepository } from "../../wallet/infrastructure/mikro-wallet.repository";
 import { WalletSchema } from "../../wallet/infrastructure/wallet.schema";
+import { InfrastructureProbe } from "../application/infrastructure-probe";
 import { AppLogger } from "../application/log-fields";
 import { MetricsPort } from "../application/metrics";
 import { ProviderIdentityPort } from "../application/provider-identity";
 import { TransactionManager } from "../application/transaction-manager";
 import { ActiveRoles } from "./active-roles";
+import { MikroInfrastructureProbe } from "./mikro-infrastructure-probe";
 import { MikroTransactionManager } from "./mikro-transaction-manager";
 import { NoopProviderIdentity } from "./noop-provider-identity";
 import { createPinoLogger, PinoAppLogger } from "./pino-logger";
@@ -80,6 +82,7 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 			{ provide: MetricsPort, useExisting: PromMetrics },
 			{ provide: ProviderIdentityPort, useClass: NoopProviderIdentity },
 			MikroTransactionManager,
+			MikroInfrastructureProbe,
 			MikroWalletRepository,
 			MikroLedgerRepository,
 			MikroWagerTransactionRepository,
@@ -88,6 +91,7 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 			LedgerIntegrityReader,
 			// Application ports resolve to the MikroORM adapters.
 			{ provide: TransactionManager, useExisting: MikroTransactionManager },
+			{ provide: InfrastructureProbe, useExisting: MikroInfrastructureProbe },
 			{ provide: WalletRepository, useExisting: MikroWalletRepository },
 			{ provide: LedgerRepository, useExisting: MikroLedgerRepository },
 			{
@@ -109,6 +113,7 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 			ActiveRoles,
 			TransactionRunner,
 			TransactionManager,
+			InfrastructureProbe,
 			WalletRepository,
 			LedgerRepository,
 			WagerTransactionRepository,

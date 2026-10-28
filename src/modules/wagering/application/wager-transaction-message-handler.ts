@@ -41,6 +41,8 @@ export interface WagerTransactionMessageHandlerDeps {
 	backoff: { baseS: number; capS: number };
 	/** SQS_MAX_RECEIVE: the delivery that reaches it is the last one. */
 	maxReceive: number;
+	/** The circuit breaker: told whenever the infrastructure (not the message) failed. */
+	infrastructure?: { reportFailure(): void };
 }
 
 /**
@@ -108,6 +110,7 @@ export class WagerTransactionMessageHandler {
 				return { kind: "retry", delaySeconds, reason: classified.reason };
 			}
 			case "infrastructure":
+				this.deps.infrastructure?.reportFailure();
 				logger.error("infrastructure unavailable", {}, error);
 				return { kind: "release", reason: classified.reason };
 			case "permanent":

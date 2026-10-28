@@ -88,6 +88,8 @@ export interface ConsumerOptions {
 	persistence?: PersistenceOptions;
 	handlerTimeoutMs?: number;
 	backoff?: { baseS: number; capS: number };
+	/** Told when the infrastructure failed (the circuit breaker, in production). */
+	infrastructure?: { reportFailure(): void };
 	/** SQS_MAX_RECEIVE (default 8, as in production). */
 	maxReceive?: number;
 	/** `TEST_FAULT` of the USE CASE (e.g. `fail-mid-transaction`), as opposed to `crash`. */
@@ -135,6 +137,9 @@ export async function createConsumerRig(
 		logger: harness.logger,
 		backoff: o.backoff ?? { baseS: 1, capS: 4 },
 		maxReceive: o.maxReceive ?? 8,
+		...(o.infrastructure === undefined
+			? {}
+			: { infrastructure: o.infrastructure }),
 	});
 	const client = newSqsClient();
 	const commands: ConsumerRig["commands"] = [];
