@@ -2,6 +2,23 @@ import { MikroOrmModule } from "@mikro-orm/nestjs";
 import { PostgreSqlDriver } from "@mikro-orm/postgresql";
 import { type DynamicModule, Module } from "@nestjs/common";
 import type { AppConfig } from "../../../shared/config";
+import { InboxRepository } from "../../messaging/application/inbox-repository";
+import { OutboxRepository } from "../../messaging/application/outbox-repository";
+import { InboxMessageSchema } from "../../messaging/infrastructure/inbox-message.schema";
+import { MikroInboxRepository } from "../../messaging/infrastructure/mikro-inbox.repository";
+import { MikroOutboxRepository } from "../../messaging/infrastructure/mikro-outbox.repository";
+import { OutboxMessageSchema } from "../../messaging/infrastructure/outbox-message.schema";
+import { WagerTransactionRepository } from "../../wagering/application/wager-transaction-repository";
+import { MikroWagerTransactionRepository } from "../../wagering/infrastructure/mikro-wager-transaction.repository";
+import { WagerTransactionSchema } from "../../wagering/infrastructure/wager-transaction.schema";
+import { LedgerRepository } from "../../wallet/application/ledger-repository";
+import { WalletRepository } from "../../wallet/application/wallet-repository";
+import { LedgerEntrySchema } from "../../wallet/infrastructure/ledger-entry.schema";
+import { MikroLedgerRepository } from "../../wallet/infrastructure/mikro-ledger.repository";
+import { MikroWalletRepository } from "../../wallet/infrastructure/mikro-wallet.repository";
+import { WalletSchema } from "../../wallet/infrastructure/wallet.schema";
+import { TransactionManager } from "../application/transaction-manager";
+import { MikroTransactionManager } from "./mikro-transaction-manager";
 import { APP_CONFIG } from "./tokens";
 import { TransactionRunner, TransactionTimeouts } from "./transaction-runner";
 
@@ -16,7 +33,13 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 			MikroOrmModule.forRoot({
 				driver: PostgreSqlDriver,
 				clientUrl: config.databaseUrl,
-				entities: [],
+				entities: [
+					WalletSchema,
+					LedgerEntrySchema,
+					WagerTransactionSchema,
+					InboxMessageSchema,
+					OutboxMessageSchema,
+				],
 				discovery: { warnWhenNoEntities: false },
 				pool: { min: 0, max: config.dbPoolMax },
 			}),
@@ -31,7 +54,32 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 				),
 			},
 			TransactionRunner,
+			MikroTransactionManager,
+			MikroWalletRepository,
+			MikroLedgerRepository,
+			MikroWagerTransactionRepository,
+			MikroInboxRepository,
+			MikroOutboxRepository,
+			// Application ports resolve to the MikroORM adapters.
+			{ provide: TransactionManager, useExisting: MikroTransactionManager },
+			{ provide: WalletRepository, useExisting: MikroWalletRepository },
+			{ provide: LedgerRepository, useExisting: MikroLedgerRepository },
+			{
+				provide: WagerTransactionRepository,
+				useExisting: MikroWagerTransactionRepository,
+			},
+			{ provide: InboxRepository, useExisting: MikroInboxRepository },
+			{ provide: OutboxRepository, useExisting: MikroOutboxRepository },
 		],
-		exports: [APP_CONFIG, TransactionRunner],
+		exports: [
+			APP_CONFIG,
+			TransactionRunner,
+			TransactionManager,
+			WalletRepository,
+			LedgerRepository,
+			WagerTransactionRepository,
+			InboxRepository,
+			OutboxRepository,
+		],
 	};
 }

@@ -3,9 +3,22 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { EntityManager } from "@mikro-orm/postgresql";
 import { type INestApplicationContext } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import { InboxRepository } from "../../src/modules/messaging/application/inbox-repository";
+import { OutboxRepository } from "../../src/modules/messaging/application/outbox-repository";
+import { MikroInboxRepository } from "../../src/modules/messaging/infrastructure/mikro-inbox.repository";
+import { MikroOutboxRepository } from "../../src/modules/messaging/infrastructure/mikro-outbox.repository";
+import { TransactionManager } from "../../src/modules/platform/application/transaction-manager";
 import { infrastructureModule } from "../../src/modules/platform/infrastructure/infrastructure.module";
+import { MikroTransactionManager } from "../../src/modules/platform/infrastructure/mikro-transaction-manager";
 import { TransactionRunner } from "../../src/modules/platform/infrastructure/transaction-runner";
+import { WagerTransactionRepository } from "../../src/modules/wagering/application/wager-transaction-repository";
+import { MikroWagerTransactionRepository } from "../../src/modules/wagering/infrastructure/mikro-wager-transaction.repository";
+import { LedgerRepository } from "../../src/modules/wallet/application/ledger-repository";
+import { WalletRepository } from "../../src/modules/wallet/application/wallet-repository";
+import { MikroLedgerRepository } from "../../src/modules/wallet/infrastructure/mikro-ledger.repository";
+import { MikroWalletRepository } from "../../src/modules/wallet/infrastructure/mikro-wallet.repository";
 import { loadConfig } from "../../src/shared/config";
+import { uniqueId } from "../support/ids";
 import { testInfra } from "../support/infra";
 
 const config = loadConfig({
@@ -89,5 +102,20 @@ describe("platform infrastructure module (PostgreSQL real)", () => {
 
 	test("X-06 returns the callback result", async () => {
 		expect(await runner.run(async () => 42)).toBe(42);
+	});
+
+	test("X-07 the application ports resolve to the MikroORM adapters and work end to end", async () => {
+		const wallets = app.get(WalletRepository);
+		const tm = app.get(TransactionManager);
+		expect(wallets).toBeInstanceOf(MikroWalletRepository);
+		expect(app.get(LedgerRepository)).toBeInstanceOf(MikroLedgerRepository);
+		expect(app.get(WagerTransactionRepository)).toBeInstanceOf(
+			MikroWagerTransactionRepository,
+		);
+		expect(app.get(InboxRepository)).toBeInstanceOf(MikroInboxRepository);
+		expect(app.get(OutboxRepository)).toBeInstanceOf(MikroOutboxRepository);
+		expect(tm).toBeInstanceOf(MikroTransactionManager);
+		// Nothing was migrated in this database: reaching the table proves the schema is mapped, the miss proves the query ran.
+		await expect(wallets.findById(uniqueId())).rejects.toThrow(/wallets/);
 	});
 });
