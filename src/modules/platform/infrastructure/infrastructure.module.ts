@@ -19,10 +19,12 @@ import { MikroLedgerRepository } from "../../wallet/infrastructure/mikro-ledger.
 import { MikroWalletRepository } from "../../wallet/infrastructure/mikro-wallet.repository";
 import { WalletSchema } from "../../wallet/infrastructure/wallet.schema";
 import { AppLogger } from "../application/log-fields";
+import { MetricsPort } from "../application/metrics";
 import { TransactionManager } from "../application/transaction-manager";
 import { ActiveRoles } from "./active-roles";
 import { MikroTransactionManager } from "./mikro-transaction-manager";
 import { createPinoLogger, PinoAppLogger } from "./pino-logger";
+import { PromMetrics } from "./prom-metrics";
 import { APP_CONFIG } from "./tokens";
 import { TransactionRunner, TransactionTimeouts } from "./transaction-runner";
 
@@ -66,6 +68,8 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 			},
 			TransactionRunner,
 			ActiveRoles,
+			PromMetrics,
+			{ provide: MetricsPort, useExisting: PromMetrics },
 			MikroTransactionManager,
 			MikroWalletRepository,
 			MikroLedgerRepository,
@@ -86,6 +90,8 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 		exports: [
 			APP_CONFIG,
 			AppLogger,
+			MetricsPort,
+			PromMetrics,
 			ActiveRoles,
 			TransactionRunner,
 			TransactionManager,
