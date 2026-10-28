@@ -35,6 +35,10 @@ import {
 import { WagerTransaction } from "../domain/wager-transaction";
 import { WagerTransactionKind } from "../domain/wager-transaction-kind";
 import type { WagerTransactionStatus } from "../domain/wager-transaction-status";
+import {
+	ExternalTransactionIdConflictError,
+	IdempotencyKeyPayloadMismatchError,
+} from "./errors";
 import type { WagerTransactionRepository } from "./wager-transaction-repository";
 
 export interface SubmitWagerTransactionCommand {
@@ -77,14 +81,6 @@ export interface SubmitWagerTransactionDeps {
 	metrics: MetricsPort;
 	logger: AppLogger;
 	faults: FaultInjector;
-}
-
-/** Placeholder of T-031a: the duplicate handling (replay / 409) is T-031b. Never process a duplicate by mistake. */
-export class DuplicateTransactionNotHandledYet extends Error {
-	constructor() {
-		super("the transaction already exists and duplicates are not handled yet");
-		this.name = "DuplicateTransactionNotHandledYet";
-	}
 }
 
 /** Placeholder of T-031a: reference resolution is T-032. A reference is never silently ignored. */
@@ -146,38 +142,55 @@ export class SubmitWagerTransaction {
 
 		let result: WagerTransactionResult;
 		try {
-			result = await this.deps.tm.run(() =>
-				this.processInTransaction(command, context, hash),
+			// Fast path (HTTP): a stored operation is answered without taking any lock.
+			const stored = await this.deps.transactions.findByIdempotencyKey(
+				command.providerId,
+				command.idempotencyKey,
 			);
+			result =
+				stored !== undefined
+					? this.replayOrConflict(stored, hash)
+					: await this.deps.tm.run(() =>
+							this.processInTransaction(command, context, hash),
+						);
 		} catch (error) {
-			this.countLockConflict(error);
+			this.countFailure(error, context);
 			throw error;
 		}
 
 		const durationMs = performance.now() - startedAt;
-		this.deps.metrics.transactionProcessed({
-			status: result.status,
-			kind: command.kind,
-			channel: context.channel,
-			failureCode: result.failureCode ?? undefined,
-		});
+		if (result.idempotentReplay) {
+			this.deps.metrics.idempotentRequest("replay", context.channel);
+		} else {
+			this.deps.metrics.transactionProcessed({
+				status: result.status,
+				kind: command.kind,
+				channel: context.channel,
+				failureCode: result.failureCode ?? undefined,
+			});
+		}
 		this.deps.metrics.observeProcessingDuration(durationMs / 1000, {
 			channel: context.channel,
 			kind: command.kind,
-			outcome: result.status,
+			outcome: result.idempotentReplay ? "replay" : result.status,
 		});
-		this.deps.logger.info("wager transaction concluded", {
-			transactionId: result.transactionId,
-			walletId: command.walletId,
-			providerId: command.providerId,
-			kind: command.kind,
-			status: result.status,
-			...(result.failureCode === null
-				? {}
-				: { failureCode: result.failureCode }),
-			channel: context.channel,
-			durationMs: Math.round(durationMs),
-		});
+		this.deps.logger.info(
+			result.idempotentReplay
+				? "wager transaction replayed"
+				: "wager transaction concluded",
+			{
+				transactionId: result.transactionId,
+				walletId: command.walletId,
+				providerId: command.providerId,
+				kind: command.kind,
+				status: result.status,
+				...(result.failureCode === null
+					? {}
+					: { failureCode: result.failureCode }),
+				channel: context.channel,
+				durationMs: Math.round(durationMs),
+			},
+		);
 		return result;
 	}
 
@@ -212,7 +225,7 @@ export class SubmitWagerTransaction {
 
 		// (3) INSERT … ON CONFLICT DO NOTHING without a conflict target.
 		if (!(await transactions.insertIfAbsent(transaction))) {
-			throw new DuplicateTransactionNotHandledYet();
+			return this.resolveDuplicate(command, hash);
 		}
 
 		const reference = await this.resolveReference(transaction);
@@ -222,6 +235,44 @@ export class SubmitWagerTransaction {
 		// After every write, before the commit (N6).
 		this.deps.faults.check("fail-mid-transaction");
 		return toResult(transaction, false);
+	}
+
+	/**
+	 * The INSERT did nothing: someone committed the same key or external id after our fast path.
+	 * Read again (a new statement sees the committed row under READ COMMITTED), with the wallet
+	 * still locked, and classify.
+	 */
+	private async resolveDuplicate(
+		command: SubmitWagerTransactionCommand,
+		hash: string,
+	): Promise<WagerTransactionResult> {
+		const { transactions } = this.deps;
+		const byKey = await transactions.findByIdempotencyKey(
+			command.providerId,
+			command.idempotencyKey,
+		);
+		if (byKey !== undefined) return this.replayOrConflict(byKey, hash);
+
+		const byExternalId = await transactions.findByExternalId(
+			command.providerId,
+			command.externalTransactionId,
+		);
+		if (byExternalId !== undefined)
+			throw new ExternalTransactionIdConflictError();
+
+		// Both UNIQUEs and the PK are the only conflict sources, and rows are never deleted.
+		throw new Error("insert conflicted but no conflicting row is visible");
+	}
+
+	/** Same key: the same payload is a replay of the stored (current) state; another payload is a 409. */
+	private replayOrConflict(
+		stored: WagerTransaction,
+		hash: string,
+	): WagerTransactionResult {
+		if (!stored.matchesPayload(hash)) {
+			throw new IdempotencyKeyPayloadMismatchError();
+		}
+		return toResult(stored, true);
 	}
 
 	private async resolveReference(
@@ -305,8 +356,13 @@ export class SubmitWagerTransaction {
 		return entry;
 	}
 
-	private countLockConflict(error: unknown): void {
-		if (error instanceof VersionAssertionError) {
+	private countFailure(error: unknown, context: SubmissionContext): void {
+		if (
+			error instanceof IdempotencyKeyPayloadMismatchError ||
+			error instanceof ExternalTransactionIdConflictError
+		) {
+			this.deps.metrics.idempotentRequest("conflict", context.channel);
+		} else if (error instanceof VersionAssertionError) {
 			this.deps.metrics.lockConflict("version_assert");
 		} else if (
 			error instanceof TransientPersistenceError &&

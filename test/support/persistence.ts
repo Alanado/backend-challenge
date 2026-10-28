@@ -16,6 +16,12 @@ import { MikroLedgerRepository } from "../../src/modules/wallet/infrastructure/m
 import { MikroWalletRepository } from "../../src/modules/wallet/infrastructure/mikro-wallet.repository";
 import { WalletSchema } from "../../src/modules/wallet/infrastructure/wallet.schema";
 
+// MikroORM colours its log lines (`\u001B[90m[query] \u001B[39m…`) and appends the timing.
+const cleanQueryLog = (message: string): string =>
+	Bun.stripANSI(message)
+		.replace(/^\[query\]\s*/, "")
+		.replace(/\s*\[took .*$/, "");
+
 export const persistenceSchemas = [
 	WalletSchema,
 	LedgerEntrySchema,
@@ -50,7 +56,10 @@ export async function createPersistence(
 		discovery: { warnWhenNoEntities: false },
 		...(onQuery === undefined
 			? {}
-			: { debug: ["query" as const], logger: onQuery }),
+			: {
+					debug: ["query" as const],
+					logger: (message: string) => onQuery(cleanQueryLog(message)),
+				}),
 	});
 	const runner = new TransactionRunner(
 		orm.em,

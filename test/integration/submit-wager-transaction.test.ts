@@ -352,25 +352,6 @@ describe("TST-I-06 SubmitWagerTransaction pipeline (use case, real PostgreSQL)",
 		await assertLedgerInvariant(p.ledgerIntegrity, wallet.id);
 	});
 
-	test("TST-I-06 a command that reaches the INSERT as a duplicate is refused loudly, never processed", async () => {
-		const wallet = await openWalletWithOpening(p, "100.00");
-		const command = bet(wallet.id, wallet.playerId);
-		await h.submit.execute(command, SUBMIT_CONTEXT);
-
-		await expect(
-			h.submit.execute(command, SUBMIT_CONTEXT),
-		).rejects.toMatchObject({
-			name: "DuplicateTransactionNotHandledYet",
-		});
-
-		expect(await walletRow(wallet.id)).toEqual({
-			balance: "75.00",
-			version: 2,
-		});
-		expect(await ledgerOf(wallet.id)).toHaveLength(2);
-		await assertLedgerInvariant(p.ledgerIntegrity, wallet.id);
-	});
-
 	test("TST-I-06 a command carrying a reference is refused loudly, never ignored", async () => {
 		const wallet = await openWalletWithOpening(p, "100.00");
 		const command = bet(wallet.id, wallet.playerId, {
@@ -474,9 +455,14 @@ describe("X-LOCK-ORDER canonical lock order (ADR-0007)", () => {
 		expect(lock).toBeGreaterThanOrEqual(0);
 		expect(insert).toBeGreaterThanOrEqual(0);
 		expect(lock).toBeLessThan(insert);
-		// nothing touches wager_transactions before the wallet is locked
-		const before = queries.slice(0, lock);
-		expect(before.filter((q) => /wager_transactions/i.test(q))).toEqual([]);
+		// Before the wallet lock only the lock-free fast-path read may touch wager_transactions.
+		const touching = queries
+			.slice(0, lock)
+			.filter((q) => /wager_transactions/i.test(q));
+		for (const statement of touching) {
+			expect(statement).toMatch(/^\s*select\b/i);
+			expect(statement).not.toMatch(/\bfor (update|share|key share)\b/i);
+		}
 		await assertLedgerInvariant(p.ledgerIntegrity, wallet.id);
 	});
 });
