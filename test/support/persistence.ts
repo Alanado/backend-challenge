@@ -28,6 +28,8 @@ export interface PersistenceOptions {
 	poolMax?: number;
 	lockTimeoutMs?: number;
 	statementTimeoutMs?: number;
+	/** Receives every SQL statement MikroORM sends (queries, begin/commit included), in order. */
+	onQuery?: (statement: string) => void;
 }
 
 /** The real adapters on a real pool, wired by hand (no Nest) for integration tests. */
@@ -37,6 +39,7 @@ export async function createPersistence(
 		poolMax = 5,
 		lockTimeoutMs = 5000,
 		statementTimeoutMs = 15000,
+		onQuery,
 	}: PersistenceOptions = {},
 ) {
 	const orm = await MikroORM.init({
@@ -45,6 +48,9 @@ export async function createPersistence(
 		entities: persistenceSchemas,
 		pool: { min: 0, max: poolMax },
 		discovery: { warnWhenNoEntities: false },
+		...(onQuery === undefined
+			? {}
+			: { debug: ["query" as const], logger: onQuery }),
 	});
 	const runner = new TransactionRunner(
 		orm.em,

@@ -42,7 +42,7 @@ Resultados do spike: ver [adr/0002-spike.md](adr/0002-spike.md).
 ## M3 — Casos de uso e HTTP (Dia 2, manhã)
 
 - [x] **T-030** `CreateWallet` + `GET /wallets/:id` + OPENING/ledger/evento. *(RF-WAL-01/02; TST-I-19)*
-- [ ] **T-031a** `SubmitWagerTransaction` — pipeline financeiro: ordem canônica (lock da wallet → `INSERT … ON CONFLICT DO NOTHING` → aplicar), `BET/WIN/LOSS`, `REJECTED` (saldo, player, moeda), ledger, `observed_balance`, outbox. Canal HTTP; o ramo SQS/inbox entra em T-042a. *(RF-TXN-03..05/10, RF-OUT-01; TST-I-05, TST-I-06 no nível do caso de uso)*
+- [x] **T-031a** `SubmitWagerTransaction` — pipeline financeiro: ordem canônica (lock da wallet → `INSERT … ON CONFLICT DO NOTHING` → aplicar), `BET/WIN/LOSS`, `REJECTED` (saldo, player, moeda), ledger, `observed_balance`, outbox. Canal HTTP; o ramo SQS/inbox entra em T-042a. *(RF-TXN-03..05/10, RF-OUT-01; TST-I-05, TST-I-06 no nível do caso de uso)*
 - [ ] **T-031b** `SubmitWagerTransaction` — idempotência: fast path sem lock, replay com saldo observado, `IDEMPOTENCY_KEY_PAYLOAD_MISMATCH`, `EXTERNAL_TRANSACTION_ID_CONFLICT`. *(RF-IDP-01..06; TST-I-07 no nível do caso de uso)*
 - [ ] **T-032** Reversões e validação de referência (`REFUND`, `ROLLBACK`, `PENDING_REFERENCE` na entrada). *(RF-TXN-06..09/11/13; TST-I-08, I-09)*
 - [ ] **T-033** Controllers, Zod, problem+json, mapeamento de status, `X-Correlation-Id`. *(RF-API-*)*
