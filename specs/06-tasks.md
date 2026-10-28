@@ -30,7 +30,7 @@ Resultados do spike: ver [adr/0002-spike.md](adr/0002-spike.md).
 
 ## M2 — Persistência (Dia 1)
 
-- [ ] **T-020** Config Zod do ambiente + módulo de infraestrutura (MikroORM, pool, timeouts). *(02-design §8)*
+- [x] **T-020** Config Zod do ambiente + módulo de infraestrutura (MikroORM, pool, timeouts). *(02-design §8)*
 - [ ] **T-021** Migration 1: `wallets`, `wager_transactions` (constraints, índice parcial de reversão, índices). *(RF-WAL-01, RF-IDP-04/06, RF-TXN-13; TST-I-01, I-02)*
 - [ ] **T-022** Migration 2: `wallet_ledger_entries` + triggers de imutabilidade + trigger de `wager_transactions`; `down` seguro. *(RF-LED-*, RF-TXN-01; TST-I-01, I-03, I-04)*
 - [ ] **T-023** Migration 3: `inbox_messages`, `outbox_messages`. *(RF-OUT-*, RF-MSG-02)*
