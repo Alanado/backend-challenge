@@ -14,14 +14,24 @@ import {
 } from "../../platform/infrastructure/tokens";
 import { LedgerRepository } from "../../wallet/application/ledger-repository";
 import { WalletRepository } from "../../wallet/application/wallet-repository";
+import { GetWagerTransaction } from "../application/get-wager-transaction";
 import { SubmitWagerTransaction } from "../application/submit-wager-transaction";
 import { WagerTransactionRepository } from "../application/wager-transaction-repository";
-import { WageringController } from "./wagering.controller";
+import {
+	ProviderTransactionsController,
+	WageringController,
+} from "./wagering.controller";
 
 /** HTTP surface of the wagering module (loaded by the HTTP role). The ports come from the global infrastructure module. */
 @Module({
-	controllers: [WageringController],
+	controllers: [WageringController, ProviderTransactionsController],
 	providers: [
+		{
+			provide: GetWagerTransaction,
+			useFactory: (transactions: WagerTransactionRepository) =>
+				new GetWagerTransaction(transactions),
+			inject: [WagerTransactionRepository],
+		},
 		{
 			provide: SubmitWagerTransaction,
 			useFactory: (

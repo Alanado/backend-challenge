@@ -25,4 +25,25 @@ export class MikroLedgerRepository extends LedgerRepository {
 			);
 		return rows.map(ledgerEntryToDomain);
 	}
+
+	async findPage(
+		walletId: string,
+		page: { before?: number | undefined; limit: number },
+	): Promise<WalletLedgerEntry[]> {
+		const rows = await this.tm.current().find(
+			LedgerEntryRow,
+			{
+				walletId,
+				...(page.before === undefined
+					? {}
+					: { walletVersion: { $lt: page.before } }),
+			},
+			{
+				orderBy: { walletVersion: "desc" },
+				limit: page.limit,
+				disableIdentityMap: true,
+			},
+		);
+		return rows.map(ledgerEntryToDomain);
+	}
 }

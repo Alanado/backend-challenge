@@ -1,8 +1,21 @@
-import { Body, Controller, Headers, Post, Res } from "@nestjs/common";
+import {
+	Body,
+	Controller,
+	Get,
+	Headers,
+	Param,
+	Post,
+	Res,
+} from "@nestjs/common";
 import type { Response } from "express";
+import { z } from "zod";
 import { LogContext } from "../../platform/application/log-context";
 import { ZodValidationPipe } from "../../platform/infrastructure/zod-validation";
 import { MissingIdempotencyKeyError } from "../application/errors";
+import {
+	GetWagerTransaction,
+	type WagerTransactionView,
+} from "../application/get-wager-transaction";
 import {
 	SubmitWagerTransaction,
 	type WagerTransactionResult,
@@ -45,7 +58,10 @@ function idempotencyKeyOf(header: string | undefined): string {
 
 @Controller("wagering/transactions")
 export class WageringController {
-	constructor(private readonly submit: SubmitWagerTransaction) {}
+	constructor(
+		private readonly submit: SubmitWagerTransaction,
+		private readonly query: GetWagerTransaction,
+	) {}
 
 	@Post()
 	async create(
@@ -65,5 +81,31 @@ export class WageringController {
 		);
 		response.status(httpStatusOf(result));
 		return result;
+	}
+
+	@Get(":transactionId")
+	byId(
+		@Param("transactionId", new ZodValidationPipe(z.uuid()))
+		transactionId: string,
+	): Promise<WagerTransactionView> {
+		LogContext.setTransactionId(transactionId);
+		return this.query.byId(transactionId);
+	}
+}
+
+const identifier = z.string().min(1).max(128);
+
+@Controller("providers/:providerId/wagering/transactions")
+export class ProviderTransactionsController {
+	constructor(private readonly query: GetWagerTransaction) {}
+
+	@Get(":externalTransactionId")
+	byExternalId(
+		@Param("providerId", new ZodValidationPipe(identifier)) providerId: string,
+		@Param("externalTransactionId", new ZodValidationPipe(identifier))
+		externalTransactionId: string,
+	): Promise<WagerTransactionView> {
+		LogContext.setProviderId(providerId);
+		return this.query.byExternalId(providerId, externalTransactionId);
 	}
 }

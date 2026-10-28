@@ -1,14 +1,31 @@
-import { Body, Controller, Get, HttpCode, Param, Post } from "@nestjs/common";
+import {
+	Body,
+	Controller,
+	Get,
+	HttpCode,
+	Param,
+	Post,
+	Query,
+} from "@nestjs/common";
 import { LogContext } from "../../platform/application/log-context";
 import { CreateWallet, type WalletView } from "../application/create-wallet";
 import { GetWallet } from "../application/get-wallet";
-import { parseCreateWallet, parseWalletId } from "./wallet-http.schemas";
+import {
+	type LedgerPageView,
+	ListWalletLedger,
+} from "../application/list-wallet-ledger";
+import {
+	parseCreateWallet,
+	parseLedgerQuery,
+	parseWalletId,
+} from "./wallet-http.schemas";
 
 @Controller("wallets")
 export class WalletController {
 	constructor(
 		private readonly createWallet: CreateWallet,
 		private readonly getWallet: GetWallet,
+		private readonly listLedger: ListWalletLedger,
 	) {}
 
 	@Post()
@@ -28,5 +45,15 @@ export class WalletController {
 		const id = parseWalletId(walletId);
 		LogContext.setWalletId(id);
 		return this.getWallet.execute(id);
+	}
+
+	@Get(":walletId/ledger")
+	ledger(
+		@Param("walletId") walletId: string,
+		@Query() query: unknown,
+	): Promise<LedgerPageView> {
+		const id = parseWalletId(walletId);
+		LogContext.setWalletId(id);
+		return this.listLedger.execute(id, parseLedgerQuery(query));
 	}
 }

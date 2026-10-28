@@ -21,8 +21,22 @@ export const createWalletSchema = z
 
 const walletIdSchema = z.uuid();
 
+/** `limit` arrives as text; 1..200 (RF-LED-04). The cursor is opaque and checked by the use case. */
+export const ledgerQuerySchema = z.object({
+	cursor: z.string().optional(),
+	limit: z
+		.string()
+		.regex(/^\d{1,3}$/, { error: "must be an integer from 1 to 200" })
+		.transform(Number)
+		.pipe(z.number().int().min(1).max(200))
+		.optional(),
+});
+
 export const parseCreateWallet = (body: unknown) =>
 	parseWith(createWalletSchema, body);
 
 export const parseWalletId = (value: unknown) =>
 	parseWith(walletIdSchema, value);
+
+export const parseLedgerQuery = (query: unknown) =>
+	parseWith(ledgerQuerySchema, query);

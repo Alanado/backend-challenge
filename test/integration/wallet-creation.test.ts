@@ -456,6 +456,7 @@ describe("TST-I-19 the creation is one SQL transaction (real PostgreSQL, failure
 				throw new Error("injected: ledger write failed");
 			},
 			findByWallet: (walletId) => p.ledger.findByWallet(walletId),
+			findPage: (walletId, page) => p.ledger.findPage(walletId, page),
 		};
 		return new CreateWallet(
 			p.tm,

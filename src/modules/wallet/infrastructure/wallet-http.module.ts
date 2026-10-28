@@ -8,6 +8,7 @@ import { WagerTransactionRepository } from "../../wagering/application/wager-tra
 import { CreateWallet } from "../application/create-wallet";
 import { GetWallet } from "../application/get-wallet";
 import { LedgerRepository } from "../application/ledger-repository";
+import { ListWalletLedger } from "../application/list-wallet-ledger";
 import { WalletRepository } from "../application/wallet-repository";
 import { WalletController } from "./wallet.controller";
 
@@ -41,6 +42,12 @@ import { WalletController } from "./wallet.controller";
 			provide: GetWallet,
 			useFactory: (wallets: WalletRepository) => new GetWallet(wallets),
 			inject: [WalletRepository],
+		},
+		{
+			provide: ListWalletLedger,
+			useFactory: (wallets: WalletRepository, ledger: LedgerRepository) =>
+				new ListWalletLedger(wallets, ledger),
+			inject: [WalletRepository, LedgerRepository],
 		},
 	],
 })
