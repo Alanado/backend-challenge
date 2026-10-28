@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { FAULT_POINTS, type FaultPoint } from "./fault-injector";
 
 export interface ConfigIssue {
 	variable: string;
@@ -96,7 +97,10 @@ const envSchema = z.object({
 
 	SHUTDOWN_GRACE_MS: int(20000, 0),
 
-	TEST_FAULT: text(""),
+	TEST_FAULT: z.preprocess(
+		blankToUndefined,
+		z.enum(FAULT_POINTS).or(z.literal("")).default(""),
+	),
 });
 
 export interface AppConfig {
@@ -143,7 +147,7 @@ export interface AppConfig {
 	};
 	breaker: { cooldownMinMs: number; cooldownMaxMs: number };
 	shutdownGraceMs: number;
-	testFault: string;
+	testFault: FaultPoint | "";
 }
 
 function issuesOf(error: z.ZodError): ConfigIssue[] {
@@ -168,6 +172,12 @@ export function loadConfig(env: Env): AppConfig {
 		crossIssues.push({
 			variable: "BREAKER_COOLDOWN_MIN_MS",
 			problem: "must not exceed BREAKER_COOLDOWN_MAX_MS",
+		});
+	}
+	if (e.NODE_ENV === "production" && e.TEST_FAULT !== "") {
+		crossIssues.push({
+			variable: "TEST_FAULT",
+			problem: "is refused when NODE_ENV=production",
 		});
 	}
 	if (crossIssues.length > 0) throw new ConfigError(crossIssues);
