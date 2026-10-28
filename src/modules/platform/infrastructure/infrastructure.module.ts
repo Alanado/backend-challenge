@@ -20,9 +20,11 @@ import { MikroWalletRepository } from "../../wallet/infrastructure/mikro-wallet.
 import { WalletSchema } from "../../wallet/infrastructure/wallet.schema";
 import { AppLogger } from "../application/log-fields";
 import { MetricsPort } from "../application/metrics";
+import { ProviderIdentityPort } from "../application/provider-identity";
 import { TransactionManager } from "../application/transaction-manager";
 import { ActiveRoles } from "./active-roles";
 import { MikroTransactionManager } from "./mikro-transaction-manager";
+import { NoopProviderIdentity } from "./noop-provider-identity";
 import { createPinoLogger, PinoAppLogger } from "./pino-logger";
 import { PromMetrics } from "./prom-metrics";
 import { APP_CONFIG } from "./tokens";
@@ -70,6 +72,7 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 			ActiveRoles,
 			PromMetrics,
 			{ provide: MetricsPort, useExisting: PromMetrics },
+			{ provide: ProviderIdentityPort, useClass: NoopProviderIdentity },
 			MikroTransactionManager,
 			MikroWalletRepository,
 			MikroLedgerRepository,
@@ -92,6 +95,7 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 			AppLogger,
 			MetricsPort,
 			PromMetrics,
+			ProviderIdentityPort,
 			ActiveRoles,
 			TransactionRunner,
 			TransactionManager,

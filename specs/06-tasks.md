@@ -67,7 +67,7 @@ Resultados do spike: ver [adr/0002-spike.md](adr/0002-spike.md).
 - [x] **T-051** Métricas Prometheus e `GET /metrics`. *(RF-OBS-03; TST-I-17)*
 - [ ] **T-052** Health `live`/`ready`. *(RF-OBS-04; TST-I-16)*
 - [ ] **T-053** Shutdown ordenado (`SIGTERM`) e `stop_grace_period`. *(RF-MSG-06; TST-I-18)*
-- [ ] **T-054** `AuthGuard` no-op + `ProviderIdentityPort`. *(RF-AUT-01)*
+- [x] **T-054** `AuthGuard` no-op + `ProviderIdentityPort`. *(RF-AUT-01)*
 
 ## M6 — Documentação e hardening (Dia 3, tarde)
 

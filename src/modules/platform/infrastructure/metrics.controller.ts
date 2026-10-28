@@ -1,8 +1,10 @@
 import { Controller, Get, Header } from "@nestjs/common";
 import { Registry } from "prom-client";
 import { PromMetrics } from "./prom-metrics";
+import { Public } from "./public.decorator";
 
 /** `GET /metrics`: open by design (ADR-0017, 04-api). */
+@Public()
 @Controller("metrics")
 export class MetricsController {
 	constructor(private readonly metrics: PromMetrics) {}

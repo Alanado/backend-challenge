@@ -4,7 +4,9 @@ import {
 	Module,
 	type NestModule,
 } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
 import { ActiveRoles } from "./active-roles";
+import { AuthGuard } from "./auth.guard";
 import { CorrelationIdMiddleware } from "./correlation-id.middleware";
 import { MetricsController } from "./metrics.controller";
 import { RoleLifecycle } from "./role-lifecycle";
@@ -21,7 +23,11 @@ export class HttpRole extends RoleLifecycle {
 /** ENABLE_HTTP. Controllers (health, metrics, wagering, wallet) join `controllers` from W5 on. */
 @Module({
 	controllers: [MetricsController],
-	providers: [HttpRole, CorrelationIdMiddleware],
+	providers: [
+		HttpRole,
+		CorrelationIdMiddleware,
+		{ provide: APP_GUARD, useClass: AuthGuard },
+	],
 })
 export class HttpRoleModule implements NestModule {
 	configure(consumer: MiddlewareConsumer): void {
