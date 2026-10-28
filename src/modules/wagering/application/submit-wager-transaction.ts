@@ -2,7 +2,9 @@ import type { Clock } from "../../../shared/clock";
 import type { FaultInjector } from "../../../shared/fault-injector";
 import type { IdGenerator } from "../../../shared/ids";
 import { Money, type MoneyProps } from "../../../shared/money";
+import type { InboxRepository } from "../../messaging/application/inbox-repository";
 import type { OutboxRepository } from "../../messaging/application/outbox-repository";
+import { InboxMessage } from "../../messaging/domain/inbox-message";
 import { LogContext } from "../../platform/application/log-context";
 import type { AppLogger } from "../../platform/application/log-fields";
 import type { MetricsPort } from "../../platform/application/metrics";
@@ -25,6 +27,7 @@ import { WagerTransactionStatus } from "../domain/wager-transaction-status";
 import {
 	ExternalTransactionIdConflictError,
 	IdempotencyKeyPayloadMismatchError,
+	InboxPayloadMismatchError,
 } from "./errors";
 import { TransactionConclusion } from "./transaction-conclusion";
 import type { WagerTransactionRepository } from "./wager-transaction-repository";
@@ -42,11 +45,21 @@ export interface SubmitWagerTransactionCommand {
 	referenceExternalTransactionId?: string | undefined;
 }
 
-/** T-042a widens `channel` with the SQS variant (`messageId`, inbox). */
-export interface SubmissionContext {
-	channel: "http";
-	correlationId: string;
-}
+/** The inbox consumer name of 02-design §4: part of the inbox primary key. */
+export const WAGER_CONSUMER_NAME = "wager-transactions-consumer";
+
+/**
+ * Where the submission came from. SQS adds what the inbox needs: the message's own id and the
+ * hash of its whole body; its `correlationId` is the `messageId` (03-messaging §7).
+ */
+export type SubmissionContext =
+	| { channel: "http"; correlationId: string }
+	| {
+			channel: "sqs";
+			correlationId: string;
+			messageId: string;
+			messageHash: string;
+	  };
 
 /** 04-api §2 "Resultado de transação". */
 export interface WagerTransactionResult {
@@ -64,6 +77,7 @@ export interface SubmitWagerTransactionDeps {
 	transactions: WagerTransactionRepository;
 	ledger: LedgerRepository;
 	outbox: OutboxRepository;
+	inbox: InboxRepository;
 	clock: Clock;
 	ids: IdGenerator;
 	metrics: MetricsPort;
@@ -88,10 +102,11 @@ export function toResult(
 }
 
 /**
- * The financial pipeline of 02-design §5 for the HTTP channel.
+ * The financial pipeline of 02-design §5, for both channels.
  *
- * Lock order (ADR-0007): wallet `FOR UPDATE` first, only then any row of `wager_transactions`.
- * Nothing in this class touches `wager_transactions` before `findByIdForUpdate` returns.
+ * Lock order (ADR-0007): (1) the inbox row (SQS only), (2) the wallet `FOR UPDATE`, (3) rows of
+ * `wager_transactions`. Nothing in this class writes `wager_transactions` before the wallet is
+ * locked, and nothing touches the inbox after it.
  */
 export class SubmitWagerTransaction {
 	private readonly conclusion: TransactionConclusion;
@@ -129,11 +144,15 @@ export class SubmitWagerTransaction {
 
 		let result: WagerTransactionResult;
 		try {
-			// Fast path (HTTP): a stored operation is answered without taking any lock.
-			const stored = await this.deps.transactions.findByIdempotencyKey(
-				command.providerId,
-				command.idempotencyKey,
-			);
+			// Fast path (HTTP only): a stored operation is answered without taking any lock. The SQS
+			// channel goes straight to the transaction: its inbox is what deduplicates.
+			const stored =
+				context.channel === "http"
+					? await this.deps.transactions.findByIdempotencyKey(
+							command.providerId,
+							command.idempotencyKey,
+						)
+					: undefined;
 			result =
 				stored !== undefined
 					? this.replayOrConflict(stored, hash)
@@ -187,12 +206,27 @@ export class SubmitWagerTransaction {
 		hash: string,
 	): Promise<WagerTransactionResult> {
 		const { wallets, transactions } = this.deps;
+		const now = this.deps.clock.now();
+
+		// (1) the inbox, before the wallet lock (ADR-0007). A duplicate waits here for the first
+		// delivery's commit while holding nothing but this transaction.
+		let inboxMessage: InboxMessage | undefined;
+		if (context.channel === "sqs") {
+			inboxMessage = InboxMessage.receive({
+				messageId: context.messageId,
+				consumerName: WAGER_CONSUMER_NAME,
+				payloadHash: context.messageHash,
+				now,
+			});
+			if (!(await this.deps.inbox.tryReceive(inboxMessage))) {
+				return this.resolveInboxDuplicate(command, context);
+			}
+		}
 
 		// (2) the wallet lock, before any wager_transactions row is touched.
 		const wallet = await wallets.findByIdForUpdate(command.walletId);
 		if (wallet === undefined) throw new WalletNotFoundError();
 
-		const now = this.deps.clock.now();
 		const transaction = WagerTransaction.create({
 			id: this.deps.ids.next(),
 			providerId: command.providerId,
@@ -212,7 +246,10 @@ export class SubmitWagerTransaction {
 
 		// (3) INSERT … ON CONFLICT DO NOTHING without a conflict target.
 		if (!(await transactions.insertIfAbsent(transaction))) {
-			return this.resolveDuplicate(command, hash);
+			// A replay under another messageId is still a message handled: close its inbox row too.
+			const replay = await this.resolveDuplicate(command, hash);
+			await this.markInboxProcessed(inboxMessage, now);
+			return replay;
 		}
 
 		const reference = await this.conclusion.resolveReference(transaction);
@@ -226,9 +263,51 @@ export class SubmitWagerTransaction {
 			now,
 		);
 
+		await this.markInboxProcessed(inboxMessage, now);
+
 		// After every write, before the commit (N6).
 		this.deps.faults.check("fail-mid-transaction");
 		return toResult(transaction, false);
+	}
+
+	private async markInboxProcessed(
+		inboxMessage: InboxMessage | undefined,
+		now: Date,
+	): Promise<void> {
+		if (inboxMessage === undefined) return;
+		inboxMessage.markProcessed(now);
+		await this.deps.inbox.markProcessed(inboxMessage);
+	}
+
+	/**
+	 * The inbox already holds this `messageId` (committed by an earlier delivery, which also
+	 * committed its effect). Same body: a redelivery, answered as a replay of what was stored,
+	 * with no new effect. Another body: not a redelivery.
+	 */
+	private async resolveInboxDuplicate(
+		command: SubmitWagerTransactionCommand,
+		context: Extract<SubmissionContext, { channel: "sqs" }>,
+	): Promise<WagerTransactionResult> {
+		const existing = await this.deps.inbox.find(
+			WAGER_CONSUMER_NAME,
+			context.messageId,
+		);
+		if (existing === undefined) {
+			// A conflict on the primary key means a committed row; rows are never deleted.
+			throw new Error("inbox insert conflicted but no row is visible");
+		}
+		if (existing.payloadHash !== context.messageHash) {
+			throw new InboxPayloadMismatchError();
+		}
+		const stored = await this.deps.transactions.findByIdempotencyKey(
+			command.providerId,
+			command.idempotencyKey,
+		);
+		if (stored === undefined) {
+			// Inbox row and transaction commit together; one without the other is a bug.
+			throw new Error("inbox message without its transaction");
+		}
+		return toResult(stored, true);
 	}
 
 	/**

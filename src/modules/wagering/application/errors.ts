@@ -37,3 +37,31 @@ export class TransactionNotFoundError extends DomainError {
 		super("transaction not found");
 	}
 }
+
+/** The queue message cannot be understood as a `WagerTransactionRequested`; retrying cannot fix it. */
+export class MalformedMessageError extends DomainError {
+	readonly code: string;
+
+	constructor(
+		/** Low-cardinality label of `dlq_messages_total{reason}`. */
+		readonly reason:
+			| "invalid_json"
+			| "invalid_schema"
+			| "unknown_type"
+			| "opening_not_allowed",
+		code: string,
+		message: string,
+	) {
+		super(message);
+		this.code = code;
+	}
+}
+
+/** The same `messageId` came back with another body (ADR-0015): not a redelivery, a conflict. */
+export class InboxPayloadMismatchError extends DomainError {
+	readonly code = "INBOX_PAYLOAD_MISMATCH";
+
+	constructor() {
+		super("the message id was already received with a different body");
+	}
+}

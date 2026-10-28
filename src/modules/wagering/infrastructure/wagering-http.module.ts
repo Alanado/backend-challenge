@@ -3,6 +3,7 @@ import type { Clock } from "../../../shared/clock";
 import type { AppConfig } from "../../../shared/config";
 import { createFaultInjector } from "../../../shared/fault-injector";
 import type { IdGenerator } from "../../../shared/ids";
+import { InboxRepository } from "../../messaging/application/inbox-repository";
 import { OutboxRepository } from "../../messaging/application/outbox-repository";
 import { AppLogger } from "../../platform/application/log-fields";
 import { MetricsPort } from "../../platform/application/metrics";
@@ -41,6 +42,7 @@ import {
 				transactions: WagerTransactionRepository,
 				ledger: LedgerRepository,
 				outbox: OutboxRepository,
+				inbox: InboxRepository,
 				clock: Clock,
 				ids: IdGenerator,
 				metrics: MetricsPort,
@@ -52,6 +54,7 @@ import {
 					transactions,
 					ledger,
 					outbox,
+					inbox,
 					clock,
 					ids,
 					metrics,
@@ -71,6 +74,7 @@ import {
 				WagerTransactionRepository,
 				LedgerRepository,
 				OutboxRepository,
+				InboxRepository,
 				CLOCK,
 				ID_GENERATOR,
 				MetricsPort,

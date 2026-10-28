@@ -143,6 +143,7 @@ export function createSubmitHarness(
 		transactions: p.transactions,
 		ledger: p.ledger,
 		outbox: p.outbox,
+		inbox: p.inbox,
 		clock,
 		ids: new Uuidv7Generator(),
 		metrics,
