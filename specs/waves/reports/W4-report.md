@@ -67,12 +67,12 @@ Notas de método: o tradutor de erros (`persistence-error-translation.ts`) foi e
 6. **SQL cru:** o ORM faz `FOR UPDATE` (`LockMode.PESSIMISTIC_WRITE`), leituras (`disableIdentityMap`) e `em.insert`. `ON CONFLICT DO NOTHING` sem alvo, `UPDATE … WHERE version = ?`, `update` da transação, `wakeDependents`, `existsProcessedReversalOf` e o SQL do reader usam `em.execute` parametrizado (permitido pelo ADR-0002, reportado aqui).
 7. **`TransactionManager.run(work: () => Promise<T>)` sem argumento:** a transação viaja por `AsyncLocalStorage`; `run` aninhado entra na transação aberta (sem savepoint). Leituras fora de `run` (fast path HTTP, futuro) não passam pela tradução de erros; as tarefas seguintes usam `run`.
 8. **`LedgerIntegrityReader`** devolve `Money` (inclui diferença negativa) e é consumido pela porta `LedgerIntegrityRead` (T-035 depende da porta). Definição de `firstBreakAtVersion`: versão do primeiro lançamento que quebra a cadeia, ou `min(última versão, wallets.version) + 1` quando a cauda não casa (wallet sem lançamentos conta como versão 1).
-9. **Script `dev`** (`bun --watch src/main.ts`) adicionado ao `package.json`; o `CLAUDE.md` ainda lista `bun run dev` como "a criar" e não foi alterado (fora das exceções do protocolo) — fica para o autor atualizar.
+9. **Script `dev`** (`bun --watch src/main.ts`) adicionado ao `package.json`. O `CLAUDE.md` foi atualizado com autorização expressa do autor (`bun run dev` saiu de "a criar" para os comandos existentes), no commit `a380beb` `docs(claude): atualiza comandos com o script dev (T-026)`, posterior ao relatório; é a única alteração fora das exceções do protocolo.
 10. **Dependências novas:** nenhuma. Sem `any`, `@ts-ignore` nem `biome-ignore`. Specs e ADRs intocados; só os três checkboxes de `06-tasks.md`.
 
 ## Perguntas em aberto / bloqueios
 
-- Nenhum bloqueio. Pendências para o autor: (a) atualizar a linha `bun run dev` do `CLAUDE.md`; (b) decidir quando remover o reaper (acompanhar correção no MikroORM/Kysely).
+- Nenhum bloqueio. Pendências para o autor: decidir quando remover o reaper (acompanhar correção no MikroORM/Kysely).
 
 ## Pré-condições da próxima onda (W5) verificadas
 
