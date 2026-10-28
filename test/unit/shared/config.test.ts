@@ -30,6 +30,7 @@ describe("loadConfig", () => {
 		expect(config.sqs.maxReceive).toBe(8);
 		expect(config.sqs.handlerTimeoutMs).toBe(20000);
 		expect(config.sqs.concurrency).toBe(5);
+		expect(config.sqs.waitTimeSeconds).toBe(20);
 		expect(config.sqs.backoffBaseS).toBe(2);
 		expect(config.sqs.backoffCapS).toBe(30);
 		expect(config.breaker).toEqual({
@@ -99,6 +100,7 @@ describe("loadConfig", () => {
 		["NODE_ENV", "staging"],
 		["LOG_LEVEL", "loud"],
 		["PENDING_REF_FACTOR", "0"],
+		["SQS_WAIT_TIME_S", "21"],
 	])("CFG-06 rejects invalid %s=%s with a readable message", (name, value) => {
 		let error: unknown;
 		try {

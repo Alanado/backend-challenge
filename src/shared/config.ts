@@ -80,6 +80,7 @@ const envSchema = z.object({
 	SQS_MAX_RECEIVE: int(8, 1),
 	SQS_HANDLER_TIMEOUT_MS: int(20000, 1),
 	SQS_CONCURRENCY: int(5, 1),
+	SQS_WAIT_TIME_S: int(20, 0).pipe(z.number().max(20)),
 	SQS_BACKOFF_BASE_S: int(2, 1),
 	SQS_BACKOFF_CAP_S: int(30, 1),
 	SQS_ENDPOINT: text("http://localhost:4566"),
@@ -133,6 +134,7 @@ export interface AppConfig {
 		maxReceive: number;
 		handlerTimeoutMs: number;
 		concurrency: number;
+		waitTimeSeconds: number;
 		backoffBaseS: number;
 		backoffCapS: number;
 		endpoint: string;
@@ -212,6 +214,7 @@ export function loadConfig(env: Env): AppConfig {
 			maxReceive: e.SQS_MAX_RECEIVE,
 			handlerTimeoutMs: e.SQS_HANDLER_TIMEOUT_MS,
 			concurrency: e.SQS_CONCURRENCY,
+			waitTimeSeconds: e.SQS_WAIT_TIME_S,
 			backoffBaseS: e.SQS_BACKOFF_BASE_S,
 			backoffCapS: e.SQS_BACKOFF_CAP_S,
 			endpoint: e.SQS_ENDPOINT,
