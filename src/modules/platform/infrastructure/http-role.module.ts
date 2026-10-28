@@ -10,6 +10,7 @@ import { WalletHttpModule } from "../../wallet/infrastructure/wallet-http.module
 import { ActiveRoles } from "./active-roles";
 import { AuthGuard } from "./auth.guard";
 import { CorrelationIdMiddleware } from "./correlation-id.middleware";
+import { HealthController } from "./health.controller";
 import { MetricsController } from "./metrics.controller";
 import { ProblemDetailsFilter } from "./problem-details.filter";
 import { RoleLifecycle } from "./role-lifecycle";
@@ -23,10 +24,10 @@ export class HttpRole extends RoleLifecycle {
 	}
 }
 
-/** ENABLE_HTTP. Controllers (health, metrics, wagering, wallet) join `controllers` from W5 on. */
+/** ENABLE_HTTP. Health and metrics live here; wagering and wallet controllers come from their modules. */
 @Module({
 	imports: [WalletHttpModule, WageringHttpModule],
-	controllers: [MetricsController],
+	controllers: [HealthController, MetricsController],
 	providers: [
 		HttpRole,
 		CorrelationIdMiddleware,

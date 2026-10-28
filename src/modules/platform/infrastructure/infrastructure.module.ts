@@ -28,11 +28,13 @@ import { MetricsPort } from "../application/metrics";
 import { ProviderIdentityPort } from "../application/provider-identity";
 import { TransactionManager } from "../application/transaction-manager";
 import { ActiveRoles } from "./active-roles";
+import { LifecycleState } from "./lifecycle-state";
 import { MikroInfrastructureProbe } from "./mikro-infrastructure-probe";
 import { MikroTransactionManager } from "./mikro-transaction-manager";
 import { NoopProviderIdentity } from "./noop-provider-identity";
 import { createPinoLogger, PinoAppLogger } from "./pino-logger";
 import { PromMetrics } from "./prom-metrics";
+import { ReadinessRegistry } from "./readiness-registry";
 import { APP_CONFIG, CLOCK, ID_GENERATOR } from "./tokens";
 import { TransactionRunner, TransactionTimeouts } from "./transaction-runner";
 
@@ -78,6 +80,8 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 			},
 			TransactionRunner,
 			ActiveRoles,
+			LifecycleState,
+			ReadinessRegistry,
 			PromMetrics,
 			{ provide: MetricsPort, useExisting: PromMetrics },
 			{ provide: ProviderIdentityPort, useClass: NoopProviderIdentity },
@@ -111,6 +115,8 @@ export function infrastructureModule(config: AppConfig): DynamicModule {
 			PromMetrics,
 			ProviderIdentityPort,
 			ActiveRoles,
+			LifecycleState,
+			ReadinessRegistry,
 			TransactionRunner,
 			TransactionManager,
 			InfrastructureProbe,

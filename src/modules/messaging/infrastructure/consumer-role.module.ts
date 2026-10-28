@@ -9,6 +9,7 @@ import { AppLogger } from "../../platform/application/log-fields";
 import { MetricsPort } from "../../platform/application/metrics";
 import { TransactionManager } from "../../platform/application/transaction-manager";
 import { ActiveRoles } from "../../platform/infrastructure/active-roles";
+import { ReadinessRegistry } from "../../platform/infrastructure/readiness-registry";
 import { RoleLifecycle } from "../../platform/infrastructure/role-lifecycle";
 import {
 	APP_CONFIG,
@@ -27,8 +28,12 @@ import { MessageConsumer } from "../application/message-consumer";
 import { OutboxRepository } from "../application/outbox-repository";
 import { SqsDeadLetterQueue } from "./sqs-dead-letter-queue";
 import { SqsMessageConsumer } from "./sqs-message-consumer";
+import { SqsQueueProbe } from "./sqs-queue-probe";
 
-/** Runs the SQS consumer (ENABLE_CONSUMER); `stop()` waits for the handlers in flight. */
+/**
+ * Runs the SQS consumer (ENABLE_CONSUMER); `stop()` waits for the handlers in flight. Its needs
+ * (the input queue and a closed circuit breaker) join the readiness of the instance.
+ */
 @Injectable()
 export class ConsumerRole extends RoleLifecycle {
 	protected readonly role = "consumer" as const;
@@ -37,11 +42,20 @@ export class ConsumerRole extends RoleLifecycle {
 		active: ActiveRoles,
 		private readonly consumer: MessageConsumer,
 		private readonly handler: WagerTransactionMessageHandler,
+		private readonly readiness: ReadinessRegistry,
+		private readonly breaker: CircuitBreaker,
+		private readonly queue: SqsQueueProbe,
 	) {
 		super(active);
 	}
 
 	protected override start(): void {
+		this.readiness.add("queue:transactions", (signal) =>
+			this.queue.check(signal),
+		);
+		this.readiness.add("circuit-breaker", () => {
+			if (this.breaker.isOpen()) throw new Error("circuit breaker open");
+		});
 		this.consumer.register(this.handler.handle);
 		this.consumer.start();
 	}
@@ -73,21 +87,37 @@ export class ConsumerRole extends RoleLifecycle {
 			inject: [APP_CONFIG, CLOCK, InfrastructureProbe, MetricsPort],
 		},
 		{
-			provide: MessageConsumer,
-			useFactory: (
-				config: AppConfig,
-				metrics: MetricsPort,
-				logger: AppLogger,
-				breaker: CircuitBreaker,
-			) => {
-				const client = new SQSClient({
+			provide: SQSClient,
+			useFactory: (config: AppConfig) =>
+				new SQSClient({
 					region: config.sqs.region,
 					endpoint: config.sqs.endpoint,
 					credentials: {
 						accessKeyId: config.sqs.accessKeyId,
 						secretAccessKey: config.sqs.secretAccessKey,
 					},
-				});
+				}),
+			inject: [APP_CONFIG],
+		},
+		{
+			provide: SqsQueueProbe,
+			useFactory: (config: AppConfig, client: SQSClient) =>
+				new SqsQueueProbe({
+					client,
+					queueUrl: config.sqs.queueUrl,
+					queueName: config.sqs.queueName,
+				}),
+			inject: [APP_CONFIG, SQSClient],
+		},
+		{
+			provide: MessageConsumer,
+			useFactory: (
+				config: AppConfig,
+				client: SQSClient,
+				metrics: MetricsPort,
+				logger: AppLogger,
+				breaker: CircuitBreaker,
+			) => {
 				return new SqsMessageConsumer({
 					client,
 					queueUrl: config.sqs.queueUrl,
@@ -105,7 +135,7 @@ export class ConsumerRole extends RoleLifecycle {
 					gate: breaker,
 				});
 			},
-			inject: [APP_CONFIG, MetricsPort, AppLogger, CircuitBreaker],
+			inject: [APP_CONFIG, SQSClient, MetricsPort, AppLogger, CircuitBreaker],
 		},
 		{
 			provide: RecordExhaustedTransaction,
@@ -177,8 +207,19 @@ export class ConsumerRole extends RoleLifecycle {
 				active: ActiveRoles,
 				consumer: MessageConsumer,
 				handler: WagerTransactionMessageHandler,
-			) => new ConsumerRole(active, consumer, handler),
-			inject: [ActiveRoles, MessageConsumer, WagerTransactionMessageHandler],
+				readiness: ReadinessRegistry,
+				breaker: CircuitBreaker,
+				queue: SqsQueueProbe,
+			) =>
+				new ConsumerRole(active, consumer, handler, readiness, breaker, queue),
+			inject: [
+				ActiveRoles,
+				MessageConsumer,
+				WagerTransactionMessageHandler,
+				ReadinessRegistry,
+				CircuitBreaker,
+				SqsQueueProbe,
+			],
 		},
 	],
 })

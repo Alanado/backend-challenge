@@ -8,14 +8,19 @@ import { MetricsPort } from "../../platform/application/metrics";
 import { TransactionManager } from "../../platform/application/transaction-manager";
 import { ActiveRoles } from "../../platform/infrastructure/active-roles";
 import { PollingLoop } from "../../platform/infrastructure/polling-loop";
+import { ReadinessRegistry } from "../../platform/infrastructure/readiness-registry";
 import { RoleLifecycle } from "../../platform/infrastructure/role-lifecycle";
 import { APP_CONFIG, CLOCK } from "../../platform/infrastructure/tokens";
 import { MessagePublisher } from "../application/message-publisher";
 import { OutboxPublisher } from "../application/outbox-publisher";
 import { OutboxRepository } from "../application/outbox-repository";
 import { SqsMessagePublisher } from "./sqs-message-publisher";
+import { SqsQueueProbe } from "./sqs-queue-probe";
 
-/** Runs the outbox publisher loop (ENABLE_OUTBOX_PUBLISHER); `stop()` finishes the batch in flight. */
+/**
+ * Runs the outbox publisher loop (ENABLE_OUTBOX_PUBLISHER); `stop()` finishes the batch in flight.
+ * The events queue joins the readiness of the instance.
+ */
 @Injectable()
 export class OutboxPublisherRole extends RoleLifecycle {
 	protected readonly role = "outbox-publisher" as const;
@@ -26,6 +31,8 @@ export class OutboxPublisherRole extends RoleLifecycle {
 		publisher: OutboxPublisher,
 		config: AppConfig,
 		logger: AppLogger,
+		private readonly readiness: ReadinessRegistry,
+		private readonly queue: SqsQueueProbe,
 	) {
 		super(active);
 		this.loop = new PollingLoop(
@@ -37,6 +44,7 @@ export class OutboxPublisherRole extends RoleLifecycle {
 	}
 
 	protected override start(): void {
+		this.readiness.add("queue:events", (signal) => this.queue.check(signal));
 		this.loop.start();
 	}
 
@@ -49,21 +57,37 @@ export class OutboxPublisherRole extends RoleLifecycle {
 @Module({
 	providers: [
 		{
-			provide: MessagePublisher,
+			provide: SQSClient,
 			useFactory: (config: AppConfig) =>
-				new SqsMessagePublisher({
-					client: new SQSClient({
-						region: config.sqs.region,
-						endpoint: config.sqs.endpoint,
-						credentials: {
-							accessKeyId: config.sqs.accessKeyId,
-							secretAccessKey: config.sqs.secretAccessKey,
-						},
-					}),
+				new SQSClient({
+					region: config.sqs.region,
+					endpoint: config.sqs.endpoint,
+					credentials: {
+						accessKeyId: config.sqs.accessKeyId,
+						secretAccessKey: config.sqs.secretAccessKey,
+					},
+				}),
+			inject: [APP_CONFIG],
+		},
+		{
+			provide: SqsQueueProbe,
+			useFactory: (config: AppConfig, client: SQSClient) =>
+				new SqsQueueProbe({
+					client,
 					queueUrl: config.sqs.eventsQueueUrl,
 					queueName: config.sqs.eventsQueueName,
 				}),
-			inject: [APP_CONFIG],
+			inject: [APP_CONFIG, SQSClient],
+		},
+		{
+			provide: MessagePublisher,
+			useFactory: (config: AppConfig, client: SQSClient) =>
+				new SqsMessagePublisher({
+					client,
+					queueUrl: config.sqs.eventsQueueUrl,
+					queueName: config.sqs.eventsQueueName,
+				}),
+			inject: [APP_CONFIG, SQSClient],
 		},
 		{
 			provide: OutboxPublisher,
@@ -107,8 +131,25 @@ export class OutboxPublisherRole extends RoleLifecycle {
 				publisher: OutboxPublisher,
 				config: AppConfig,
 				logger: AppLogger,
-			) => new OutboxPublisherRole(active, publisher, config, logger),
-			inject: [ActiveRoles, OutboxPublisher, APP_CONFIG, AppLogger],
+				readiness: ReadinessRegistry,
+				queue: SqsQueueProbe,
+			) =>
+				new OutboxPublisherRole(
+					active,
+					publisher,
+					config,
+					logger,
+					readiness,
+					queue,
+				),
+			inject: [
+				ActiveRoles,
+				OutboxPublisher,
+				APP_CONFIG,
+				AppLogger,
+				ReadinessRegistry,
+				SqsQueueProbe,
+			],
 		},
 	],
 })
