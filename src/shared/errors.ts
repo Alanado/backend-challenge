@@ -19,3 +19,7 @@ export class CurrencyMismatchError extends DomainError {
 		super(`currency mismatch: expected ${expected}, received ${received}`);
 	}
 }
+
+export class InvalidLedgerEntryError extends DomainError {
+	readonly code = "INVALID_LEDGER_ENTRY";
+}
