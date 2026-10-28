@@ -1,7 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { Client } from "pg";
 import { withMigrator } from "../../scripts/lib/migrator";
-import { connect, insertTransaction, insertWallet } from "../support/sql";
+import {
+	connect,
+	insertLedgerEntry,
+	insertTransaction,
+	insertWallet,
+} from "../support/sql";
 import {
 	createSuiteDatabase,
 	migrationsPath,
@@ -10,7 +15,8 @@ import {
 
 // Tables each migration owns; this list grows with the migrations (T-021..T-023).
 const MIGRATION_1_TABLES = ["wallets", "wager_transactions"];
-const ALL_TABLES = [...MIGRATION_1_TABLES];
+const MIGRATION_2_TABLES = ["wallet_ledger_entries"];
+const ALL_TABLES = [...MIGRATION_1_TABLES, ...MIGRATION_2_TABLES];
 
 let db: SuiteDatabase;
 let client: Client;
@@ -83,6 +89,44 @@ describe("TST-I-01 migrations up and down", () => {
 		await up();
 		await downAll();
 		expect(await existingTables()).toEqual([]);
+	});
+
+	test("TST-I-01 down/up/down works with a populated ledger and terminal transactions (triggers active)", async () => {
+		await up();
+		const wallet = (await insertWallet(client)).id as string;
+		const processed = (
+			await insertTransaction(client, wallet, {
+				status: "PROCESSED",
+				processed_at: new Date(),
+			})
+		).id as string;
+		await insertTransaction(client, wallet, {
+			status: "FAILED",
+			failure_code: "INTERNAL_ERROR",
+		});
+		await insertLedgerEntry(client, wallet, processed);
+		await downAll();
+		expect(await existingTables()).toEqual([]);
+		await up();
+		const again = (await insertWallet(client)).id as string;
+		const tx = (
+			await insertTransaction(client, again, {
+				status: "PROCESSED",
+				processed_at: new Date(),
+			})
+		).id as string;
+		await insertLedgerEntry(client, again, tx);
+		await downAll();
+		expect(await existingTables()).toEqual([]);
+	});
+
+	test("TST-I-01 down leaves no trigger functions behind", async () => {
+		await up();
+		await downAll();
+		const res = await client.query(
+			"select proname from pg_proc where proname in ('ledger_append_only', 'wager_transactions_guard')",
+		);
+		expect(res.rows).toEqual([]);
 	});
 
 	test("TST-I-01 each migration reverts on its own, one step at a time", async () => {

@@ -89,3 +89,25 @@ export function insertTransaction(
 		...overrides,
 	});
 }
+
+/** A valid CREDIT ledger entry (version 2, 100.00 -> 110.00) for `transactionId`; `overrides` change any column. */
+export function insertLedgerEntry(
+	client: Client,
+	walletId: string,
+	transactionId: string,
+	overrides: Row = {},
+): Promise<Row> {
+	return insert(client, "wallet_ledger_entries", {
+		id: uniqueId(),
+		wallet_id: walletId,
+		transaction_id: transactionId,
+		wallet_version: 2,
+		direction: "CREDIT",
+		amount: "10.00",
+		currency: "BRL",
+		balance_before: "100.00",
+		balance_after: "110.00",
+		created_at: new Date(),
+		...overrides,
+	});
+}
