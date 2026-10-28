@@ -1,0 +1,5 @@
+#!/bin/sh
+# Valida a mensagem de commit com commitlint, executado pelo Bun do projeto (sem Husky).
+# Instalação: `bun run hooks:install` (também roda no `prepare` do `bun install`).
+export PATH="$HOME/.bun/bin:$PATH"
+exec bun run --silent commitlint --edit "$1"

@@ -78,3 +78,39 @@ O MiniStack é mais leve, mas não valida limites de parâmetro que o SQS real v
 
 - A imagem do LocalStack tem 1,77 GB (MiniStack: 258 MB); o primeiro `pull` é demorado.
 - Região e credenciais podem ser fictícias (`us-east-1`, `test`/`test`).
+
+## T-004 — R-04/R-05: prom-client, Biome e commitlint
+
+Script: `bun run spike:tooling` ([spikes/tooling/main.ts](../../spikes/tooling/main.ts)). Resultado: **4/4 itens ok**; R-04 e R-05 **não bloqueiam**. Os itens 2 e 3 são provados por testes de verdade (`test/unit/tooling/lint-rules.test.ts`, `commit-msg-hook.test.ts`), que o script executa; eles também rodam em `bun run test:unit`.
+
+### Versões
+
+| Componente | Versão |
+|---|---|
+| `prom-client` | 15.1.3 |
+| `@biomejs/biome` | 2.6.3 |
+| `@commitlint/cli` / `@commitlint/config-conventional` | 21.2.4 / 21.2.4 |
+
+### prom-client (R-04)
+
+| Item | Resultado |
+|---|---|
+| Counter, gauge e histogram com labels, servidos em `GET /metrics` | ok (`Registry#metrics()`, `Content-Type: text/plain; version=0.0.4`; buckets, `_count` e `_sum` corretos) |
+| Métricas padrão (`collectDefaultMetrics`) | registram 31 séries sem erro, mas **só parte é confiável sob o Bun**: `process_cpu_*`, `process_resident_memory_bytes`, `process_open_fds` e `nodejs_heap_size_*` têm valores reais; `nodejs_eventloop_lag_seconds` fica sempre `0`, `nodejs_gc_duration_seconds` fica **vazio** e `nodejs_active_handles_total`/`_requests_total` ficam `0` |
+
+**Decisão (fallback do R-04, sem mudar ADR):** as métricas de negócio (ADR-0018) usam contadores/gauges/histogramas próprios. Ligar `collectDefaultMetrics` é opcional e só o grupo `process_*`/heap deve ser tratado como informação; **não** usar event loop lag, GC nem handles como sinal.
+
+### Biome (R-05)
+
+- `noFloatingPromises` **existe** na 2.6.3, no grupo **`nursery`** (`lint/nursery/noFloatingPromises`; severidade padrão `info`, por isso foi elevada a `"error"`). Usa inferência de tipos do Biome (domínio `types`): detecta uma promise solta de função `async` declarada no mesmo arquivo. A regra está no grupo nursery, então pode mudar de nome/grupo em versão futura; a versão do Biome é fixa (2.6.3).
+- Prova (fixture): uma chamada `save();` sem `await`/`void`/`.catch` **falha** o lint com `lint/nursery/noFloatingPromises`; `await`, `void` e `.catch(() => …)` passam (`test/support/fixtures/lint/*.ts.txt`, rodados com a configuração real do repositório).
+- `useImportType` **desligada** em `style`. Motivo (comentário no arquivo de configuração): com `emitDecoratorMetadata`, `import type` apaga o token de DI do Nest e a injeção por tipo de construtor falha em runtime. Prova no teste: com a regra ligada o Biome sinaliza o import do `@Injectable()` (`All these imports are only used as types`); com ela desligada, passa.
+- O arquivo de configuração passou de `biome.json` para **`biome.jsonc`** porque `biome.json` não aceita comentários. As specs ainda citam `biome.json`; a referência é o `biome.jsonc`.
+- O plano B do R-05 (aceitar a lacuna) **não foi necessário**.
+
+### commitlint (R-05)
+
+- `@commitlint/cli` roda sob Bun (`bun run --silent commitlint --edit <arquivo>`). Hook versionado em [.githooks/commit-msg](../../.githooks/commit-msg) (adiciona `~/.bun/bin` ao `PATH`, pois hooks podem rodar sem o `PATH` do shell interativo); instalado por `bun run hooks:install` (`git config core.hooksPath .githooks`), que também roda no `prepare` do `bun install`. **Sem Husky.** O `core.hooksPath` vai para o `.git/config` comum, valendo para todos os worktrees.
+- `config-conventional` **aceita** descrições em português com acentos (`feat(wallet): adiciona validação de saldo e conciliação (T-010)`; `feat(wagering): adiciona idempotência por chave (T-031b)`) **sem ajuste**: nenhuma regra foi desligada nem alterada (`type-enum`, `type-empty`, `subject-empty`, `subject-case`, `subject-full-stop` seguem ativas e foram provadas rejeitando).
+- Única adição: a regra local `no-co-authored-by` (em `commitlint.config.mjs`) que rejeita trailer `Co-Authored-By` e linha de atribuição à ferramenta, para impor por máquina a regra do CLAUDE.md/ADR-0001.
+- Atenção para o autor: `body-max-line-length` (100) e `footer-leading-blank` continuam ativas; corpos de commit com linhas longas são rejeitados.

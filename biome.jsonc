@@ -16,7 +16,16 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"preset": "recommended"
+			"preset": "recommended",
+			// Promise solta é bug em fluxo financeiro (erro engolido, ordem quebrada). Grupo nursery no Biome 2.6.3.
+			"nursery": {
+				"noFloatingPromises": "error"
+			},
+			"style": {
+				// Desligada de propósito: com emitDecoratorMetadata, `import type` apaga o token de DI do Nest
+				// e a injeção por tipo de construtor falha em runtime (ADR-0020, spike T-004).
+				"useImportType": "off"
+			}
 		}
 	},
 	"javascript": {
