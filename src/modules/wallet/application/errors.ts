@@ -16,3 +16,12 @@ export class WalletNotFoundError extends DomainError {
 		super("wallet not found");
 	}
 }
+
+/** The ledger `cursor` is not one this API issued (opaque base64url of a wallet version): 400 `INVALID_CURSOR`. */
+export class InvalidCursorError extends DomainError {
+	readonly code = "INVALID_CURSOR";
+
+	constructor() {
+		super("the cursor is not valid");
+	}
+}

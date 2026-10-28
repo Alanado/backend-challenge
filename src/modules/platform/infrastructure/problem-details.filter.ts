@@ -7,6 +7,13 @@ import {
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 import {
+	ExternalTransactionIdConflictError,
+	IdempotencyKeyPayloadMismatchError,
+	MissingIdempotencyKeyError,
+	TransactionNotFoundError,
+} from "../../wagering/application/errors";
+import {
+	InvalidCursorError,
 	WalletAlreadyExistsError,
 	WalletNotFoundError,
 } from "../../wallet/application/errors";
@@ -47,7 +54,7 @@ function describeValidation(error: RequestValidationError): string {
 	return issues.length === 0 ? "Invalid request" : issues.join("; ");
 }
 
-/** Maps what the application throws to the problem catalog of 04-api §4.2 (the rest lands in T-033). */
+/** Maps what the application throws to the problem catalog of 04-api §4.2 (04-api §4.2). */
 function problemFor(exception: unknown): Problem | undefined {
 	if (exception instanceof RequestValidationError) {
 		return {
@@ -55,6 +62,51 @@ function problemFor(exception: unknown): Problem | undefined {
 			errorCode: "VALIDATION_ERROR",
 			title: "Invalid request",
 			detail: describeValidation(exception),
+			retryable: false,
+		};
+	}
+	if (exception instanceof MissingIdempotencyKeyError) {
+		return {
+			status: 400,
+			errorCode: "MISSING_IDEMPOTENCY_KEY",
+			title: "Idempotency key missing or invalid",
+			detail: exception.message,
+			retryable: false,
+		};
+	}
+	if (exception instanceof InvalidCursorError) {
+		return {
+			status: 400,
+			errorCode: "INVALID_CURSOR",
+			title: "Invalid cursor",
+			detail: exception.message,
+			retryable: false,
+		};
+	}
+	if (exception instanceof IdempotencyKeyPayloadMismatchError) {
+		return {
+			status: 409,
+			errorCode: "IDEMPOTENCY_KEY_PAYLOAD_MISMATCH",
+			title: "Idempotency key reused with a different payload",
+			detail: exception.message,
+			retryable: false,
+		};
+	}
+	if (exception instanceof ExternalTransactionIdConflictError) {
+		return {
+			status: 409,
+			errorCode: "EXTERNAL_TRANSACTION_ID_CONFLICT",
+			title: "External transaction id already used with another key",
+			detail: exception.message,
+			retryable: false,
+		};
+	}
+	if (exception instanceof TransactionNotFoundError) {
+		return {
+			status: 404,
+			errorCode: "TRANSACTION_NOT_FOUND",
+			title: "Transaction not found",
+			detail: exception.message,
 			retryable: false,
 		};
 	}

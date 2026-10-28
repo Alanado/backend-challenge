@@ -5,6 +5,7 @@ import {
 	type NestModule,
 } from "@nestjs/common";
 import { APP_FILTER, APP_GUARD } from "@nestjs/core";
+import { WageringHttpModule } from "../../wagering/infrastructure/wagering-http.module";
 import { WalletHttpModule } from "../../wallet/infrastructure/wallet-http.module";
 import { ActiveRoles } from "./active-roles";
 import { AuthGuard } from "./auth.guard";
@@ -24,7 +25,7 @@ export class HttpRole extends RoleLifecycle {
 
 /** ENABLE_HTTP. Controllers (health, metrics, wagering, wallet) join `controllers` from W5 on. */
 @Module({
-	imports: [WalletHttpModule],
+	imports: [WalletHttpModule, WageringHttpModule],
 	controllers: [MetricsController],
 	providers: [
 		HttpRole,

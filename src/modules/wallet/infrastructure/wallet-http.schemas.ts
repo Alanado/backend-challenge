@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { RequestValidationError } from "../../platform/application/validation-error";
+import { parseWith } from "../../platform/infrastructure/zod-validation";
 
 const moneySchema = z
 	.object({
@@ -21,18 +21,8 @@ export const createWalletSchema = z
 
 const walletIdSchema = z.uuid();
 
-function parse<T>(schema: z.ZodType<T>, input: unknown): T {
-	const result = schema.safeParse(input);
-	if (result.success) return result.data;
-	throw new RequestValidationError(
-		result.error.issues.map((issue) => ({
-			path: issue.path.join("."),
-			message: issue.message,
-		})),
-	);
-}
-
 export const parseCreateWallet = (body: unknown) =>
-	parse(createWalletSchema, body);
+	parseWith(createWalletSchema, body);
 
-export const parseWalletId = (value: unknown) => parse(walletIdSchema, value);
+export const parseWalletId = (value: unknown) =>
+	parseWith(walletIdSchema, value);
