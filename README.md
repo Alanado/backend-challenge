@@ -1,3 +1,214 @@
+# Distributed Wagering Processor — solução do candidato
+
+Serviço financeiro distribuído que processa transações de apostas (`BET`, `WIN`, `LOSS`, `REFUND`, `ROLLBACK`) vindas de provedores por HTTP e por SQS, e permanece correto com mensagens duplicadas, fora de ordem, concorrentes e com várias instâncias. Stack: Bun 1.4 · TypeScript estrito · NestJS · MikroORM · PostgreSQL 17 · SQS (LocalStack 4.14, sem token) · Docker Compose.
+
+> **Esta seção é do candidato. O enunciado original do desafio está intacto logo abaixo** (a partir de "Technical Challenge — Distributed Wagering Processor"). As decisões, os trade-offs e as limitações estão no [ARCHITECTURE.md](ARCHITECTURE.md); o processo de especificação está em [specs/](specs/README.md).
+
+**Neste README:** [Pré-requisitos](#pré-requisitos) · [Subir tudo (3 instâncias)](#subir-tudo-com-3-instâncias) · [Rodar uma instância](#rodar-uma-instância-em-desenvolvimento) · [Testes](#testes) · [Usando a API](#usando-a-api) · [Health e métricas](#health-e-métricas) · [Variáveis de ambiente](#variáveis-de-ambiente) · [Estrutura](#estrutura-do-repositório) · [Uso de IA e SDD](#uso-de-ia-e-sdd)
+
+## Pré-requisitos
+
+- **Bun 1.4.x** (testado com 1.4.4). Se o shell não achar o `bun`: `export PATH="$HOME/.bun/bin:$PATH"`.
+- **Docker** com o plugin Compose v2 (`docker compose`). Os testes de integração e concorrência usam PostgreSQL e SQS reais, nunca mocks.
+- Portas livres: `5432`/`4566` (infra de desenvolvimento), `3001`–`3003` (as 3 instâncias), `5433`/`4567` (infra de teste, separada da de desenvolvimento).
+- Cerca de 1 GB de RAM para o Compose completo e mais algumas centenas de MB durante a suíte de concorrência (medido em [specs/adr/0002-spike.md](specs/adr/0002-spike.md)).
+
+## Subir tudo com 3 instâncias
+
+```bash
+bun install
+docker compose up --build -d --wait
+bun run compose:smoke
+```
+
+O Compose sobe Postgres, o emulador SQS, um serviço `migrate` de execução única (roda as migrations e cria as filas) e depois `app1`, `app2` e `app3` (a mesma imagem, portas 3001, 3002 e 3003, todos os papéis ligados em cada uma). Os três apps só iniciam depois que o `migrate` termina com sucesso. O `compose:smoke` cria uma wallet, faz uma `BET` por **cada** instância, confere que as três enxergam o mesmo saldo, o ledger e a reconciliação, e sai com 0 se tudo confere.
+
+```bash
+docker compose ps               # app1..3 e a infra devem estar "healthy"
+docker compose logs -f app1     # logs JSON
+docker compose down -v          # derruba e apaga o volume do Postgres
+```
+
+## Rodar uma instância em desenvolvimento
+
+Para depurar fora do Docker, suba só a infra, migre e rode o app com recarga automática:
+
+```bash
+bun install
+docker compose up -d --wait postgres sqs     # Postgres (5432) e SQS (4566)
+cp .env.example .env                         # DATABASE_URL e SQS_ENDPOINT de desenvolvimento
+bun run queues:create                        # filas FIFO, DLQ e fila de eventos (idempotente)
+bun run migration:up                         # aplica as migrations
+bun run dev                                  # http://localhost:3000
+```
+
+`bun run migration:down` reverte **a última** migration aplicada. Se o Compose completo já estiver no ar, a infra é a mesma: pule o `docker compose up` e as filas já existem. `bun run dev` usa a porta 3000 (variável `PORT`) e liga todos os papéis; para desligar algum, use as variáveis `ENABLE_*` (tabela abaixo).
+
+## Testes
+
+```bash
+bun run typecheck && bun run lint   # TypeScript estrito e Biome
+bun run test:unit                   # domínio puro, sem infra
+bun run test:infra:up               # Postgres (5433) e SQS (4567) de teste; idempotente
+bun run test:integration            # banco e SQS reais, aplicação em processo
+bun run test:concurrency            # paralelismo real e 3 processos da aplicação (Bun.spawn)
+bun run test                        # unit + integration + concurrency
+bun run test:infra:down             # derruba a infra de teste e apaga os dados
+```
+
+- A suíte inteira leva cerca de 3 minutos. As suítes de integração e concorrência exigem `test:infra:up`.
+- Cada suíte cria um **banco novo** a partir de um template já migrado e **filas com sufixo aleatório**; não há `TRUNCATE` (os triggers do ledger o bloqueiam) nem `sleep` fixo (os testes esperam com `eventually`).
+- Todo teste que toca uma wallet termina chamando `assertLedgerInvariant`: saldo = soma do ledger, cadeia contínua, saldo ≥ 0, `version` coerente.
+- Os títulos dos testes carregam o ID do plano (`TST-U-01`, `TST-I-05`, `TST-C-04`…). A matriz requisito → tarefa → teste está em [specs/traceability.md](specs/traceability.md) (gerada por `bun scripts/check-traceability.ts`).
+- Cobertura: `bun test --coverage test/unit` (sem limite numérico; o foco são os caminhos críticos).
+- **Teste de carga (`test:load`, stretch S-01): não foi implementado.**
+
+Conferências de documentação (saem com 1 no primeiro desvio):
+
+```bash
+bun scripts/check-readme-commands.ts   # todo `bun run <script>` deste README existe no package.json
+bun scripts/check-architecture.ts      # seções obrigatórias e links do ARCHITECTURE.md
+bun scripts/check-traceability.ts      # todo requisito com teste tem teste; regenera specs/traceability.md
+```
+
+## Usando a API
+
+Com o Compose no ar (qualquer porta de `3001` a `3003` serve; o estado está no banco). Os exemplos abaixo foram executados contra o Compose e as respostas conferem.
+
+```bash
+BASE=http://localhost:3001
+PLAYER=$(cat /proc/sys/kernel/random/uuid)
+
+# 1. Criar a wallet (gera a transação interna OPENING e o lançamento CREDIT na mesma transação SQL)
+curl -s -X POST $BASE/wallets -H 'Content-Type: application/json' \
+  -d "{\"playerId\":\"$PLAYER\",\"initialBalance\":{\"amount\":\"1000.00\",\"currency\":\"BRL\"}}"
+# 201 {"id":"…","playerId":"…","balance":{"amount":"1000.00","currency":"BRL"},"version":1}
+WALLET=<id da resposta>        # repetir o POST para o mesmo player e moeda: 409 WALLET_ALREADY_EXISTS
+
+# 2. BET de 25,00 (o header Idempotency-Key é obrigatório)
+BET="{\"providerId\":\"provider-a\",\"externalTransactionId\":\"bet-1\",\"playerId\":\"$PLAYER\",\"walletId\":\"$WALLET\",\"roundId\":\"round-1\",\"gameId\":\"fortune-chimp\",\"kind\":\"BET\",\"money\":{\"amount\":\"25.00\",\"currency\":\"BRL\"}}"
+curl -s -i -X POST $BASE/wagering/transactions -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: provider-a:bet-1' -d "$BET"
+# 201 {"transactionId":"…","status":"PROCESSED","balance":{"amount":"975.00",…},"failureCode":null,"idempotentReplay":false}
+
+# 3. Replay: mesma chave e mesmo corpo, em outra instância. 200, idempotentReplay=true, saldo observado na época
+curl -s -i -X POST http://localhost:3002/wagering/transactions -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: provider-a:bet-1' -d "$BET"
+# 200 {"transactionId":"<o mesmo>","status":"PROCESSED","balance":{"amount":"975.00",…},"idempotentReplay":true}
+
+# 4. Mesma chave com payload diferente é conflito, não replay
+curl -s -i -X POST $BASE/wagering/transactions -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: provider-a:bet-1' -d "${BET/25.00/26.00}"
+# 409 application/problem+json, errorCode IDEMPOTENCY_KEY_PAYLOAD_MISMATCH
+
+# 5. Reversão: REFUND da BET (devolve 25,00); depois um ROLLBACK da MESMA BET é rejeitado
+REFUND="{\"providerId\":\"provider-a\",\"externalTransactionId\":\"refund-1\",\"playerId\":\"$PLAYER\",\"walletId\":\"$WALLET\",\"roundId\":\"round-1\",\"gameId\":\"fortune-chimp\",\"kind\":\"REFUND\",\"money\":{\"amount\":\"25.00\",\"currency\":\"BRL\"},\"referenceExternalTransactionId\":\"bet-1\"}"
+curl -s -i -X POST $BASE/wagering/transactions -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: provider-a:refund-1' -d "$REFUND"
+# 201 PROCESSED, saldo 1000.00
+ROLLBACK="${REFUND//refund-1/rollback-1}"; ROLLBACK="${ROLLBACK/REFUND/ROLLBACK}"
+curl -s -i -X POST $BASE/wagering/transactions -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: provider-a:rollback-1' -d "$ROLLBACK"
+# 422 {"status":"REJECTED","failureCode":"REFERENCE_ALREADY_REVERSED",…} saldo continua 1000.00 (ADR-0010)
+# Um 422 é definitivo: não reenvie com a mesma chave (o replay devolveria o mesmo resultado).
+
+# 6. Consultas
+curl -s $BASE/wallets/$WALLET
+curl -s $BASE/providers/provider-a/wagering/transactions/bet-1
+curl -s "$BASE/wallets/$WALLET/ledger?limit=50"          # mais recente primeiro; use "nextCursor" em ?cursor=
+
+# 7. Reconciliação: compara o saldo com a soma do ledger e confere a cadeia; nunca corrige nada
+curl -s -X POST $BASE/wallets/$WALLET/reconciliation
+# 200 {"storedBalance":…,"calculatedBalance":…,"difference":{"amount":"0.00",…},"consistent":true,"checkedEntries":3,"chain":{"continuous":true,"firstBreakAtVersion":null}}
+```
+
+Um `REFUND` ou `ROLLBACK` cuja referência ainda não chegou responde **202** `PENDING_REFERENCE`; um worker tenta de novo com backoff e, quando a referência chega, a transação termina `PROCESSED` (consulte-a pelo `GET`). Se a referência nunca chegar, termina `REJECTED` com `REFERENCE_NOT_FOUND`.
+
+Regra para o provedor: **2xx** aplicou · **202** aceito, resultado pendente · **422** não aplicou, definitivo · **400/409/404** corrija a requisição · **503** (com `Retry-After`) reenvie com a mesma chave. Catálogos completos em [ARCHITECTURE.md](ARCHITECTURE.md#9-taxonomia-de-failurecode-e-errorcode-e-status-http).
+
+## Health e métricas
+
+```bash
+curl -s $BASE/health/live      # {"status":"up"}; não toca em nenhuma dependência
+curl -s $BASE/health/ready     # 200 {"status":"up","checks":{"database":"up","lifecycle":"up","queue:transactions":"up","circuit-breaker":"up","queue:events":"up"}}
+curl -s $BASE/metrics          # Prometheus
+```
+
+`ready` responde 503 com o banco fora, fila inexistente, circuit breaker aberto ou durante o shutdown. Os três endpoints são abertos (não há autenticação). Métricas: `wager_transactions_total`, `idempotent_requests_total`, `retries_total`, `dlq_messages_total`, `lock_conflicts_total`, `outbox_lag_seconds`, `outbox_publish_failed_total`, `processing_duration_seconds`, `reconciliation_divergences_total` e `circuit_breaker_open`.
+
+## Variáveis de ambiente
+
+Validadas com Zod no boot (valor inválido derruba o processo com a lista de problemas); definição em [src/shared/config.ts](src/shared/config.ts), exemplo em [.env.example](.env.example). Só `DATABASE_URL` é obrigatória. Todos os valores abaixo são fictícios ou padrões de desenvolvimento.
+
+| Variável | Padrão | Uso |
+|---|---|---|
+| `DATABASE_URL` | — (obrigatória) | Conexão do PostgreSQL |
+| `NODE_ENV` · `PORT` · `LOG_LEVEL` | `development` · `3000` · `info` | Ambiente, porta HTTP, nível de log (`debug`/`info`/`warn`/`error`) |
+| `ENABLE_HTTP` · `ENABLE_CONSUMER` · `ENABLE_OUTBOX_PUBLISHER` · `ENABLE_PENDING_WORKER` | `true` | Papéis da instância (todos ligados em toda instância do Compose) |
+| `DB_POOL_MAX` | `10` | Conexões por instância |
+| `LOCK_TIMEOUT_MS` · `STATEMENT_TIMEOUT_MS` | `5000` · `15000` | `SET LOCAL` em cada transação |
+| `PENDING_REF_MAX_ATTEMPTS` · `_BASE_MS` · `_FACTOR` · `_CAP_MS` | `6` · `5000` · `2` · `300000` | Backoff das referências fora de ordem |
+| `PENDING_REF_POLL_MS` · `PENDING_REF_CONCURRENCY` | `1000` · `5` | Worker de `PENDING_REFERENCE` |
+| `OUTBOX_BATCH` · `OUTBOX_POLL_MS` | `10` · `500` | Publisher da outbox |
+| `OUTBOX_BACKOFF_BASE_MS` · `OUTBOX_BACKOFF_CAP_MS` | `1000` · `60000` | Backoff de publicação (sem limite de tentativas) |
+| `SQS_MAX_RECEIVE` | `8` | Recepções antes de gravar `FAILED` e enviar à DLQ |
+| `SQS_HANDLER_TIMEOUT_MS` · `SQS_CONCURRENCY` · `SQS_WAIT_TIME_S` | `20000` · `5` · `20` | Consumidor: timeout do handler, grupos em paralelo, long polling (0–20) |
+| `SQS_BACKOFF_BASE_S` · `SQS_BACKOFF_CAP_S` | `2` · `30` | Visibilidade após falha transitória |
+| `SQS_ENDPOINT` · `SQS_REGION` | `http://localhost:4566` · `us-east-1` | Emulador SQS |
+| `SQS_ACCESS_KEY_ID` · `SQS_SECRET_ACCESS_KEY` | `test` · `test` | Credenciais fictícias do emulador |
+| `SQS_QUEUE_NAME` · `SQS_DLQ_NAME` · `SQS_EVENTS_QUEUE_NAME` | `wager-transactions.fifo` · `wager-transactions-dlq.fifo` · `wager-events.fifo` | Nomes das filas |
+| `SQS_QUEUE_URL` · `SQS_EVENTS_QUEUE_URL` | vazio | URLs explícitas (opcionais; senão resolvidas pelo nome) |
+| `BREAKER_COOLDOWN_MIN_MS` · `BREAKER_COOLDOWN_MAX_MS` | `1000` · `30000` | Circuit breaker do consumidor (mínimo ≤ máximo) |
+| `SHUTDOWN_GRACE_MS` | `20000` | Espera dos handlers no `SIGTERM` antes de devolver as mensagens |
+| `SHUTDOWN_DRAIN_DELAY_MS` | `0` | Pausa com a readiness em 503 e o HTTP ainda aberto, antes de fechar o listener (o Compose usa `2000`) |
+| `TEST_FAULT` | vazio | Injeção de falha **só para testes** (`crash-after-commit-before-ack`, `crash-after-publish-before-commit`, `fail-mid-transaction`); a aplicação **recusa** o valor com `NODE_ENV=production` |
+
+Só para a infra e os testes: `TEST_DATABASE_URL` (padrão `postgres://wagering:wagering@localhost:5433/wagering_test`) e `TEST_SQS_ENDPOINT` (padrão `http://localhost:4567`).
+
+## Estrutura do repositório
+
+```
+src/
+  main.ts · app.module.ts        bootstrap, papéis por flag, shutdown ordenado
+  shared/                        Money, erros, Clock, ids (UUIDv7), hash, config (Zod), seam de falha
+  modules/
+    wallet/                      domain · application · infrastructure  (Wallet, ledger, reconciliação)
+    wagering/                    domain · application · infrastructure  (transações, idempotência, referências)
+    messaging/                   domain · application · infrastructure  (inbox, outbox, SQS, poller, breaker)
+    platform/                    health, métricas, logs, auth no-op, filtro problem+json, transações
+  migrations/                    3 migrations versionadas e reversíveis
+scripts/                         migrate, create-queues, compose-smoke e as conferências de documentação
+test/{unit,integration,concurrency,support}/
+specs/                           requisitos, design, ADRs, plano de testes, ondas e relatórios
+docker-compose.yml               dev e demonstração: Postgres, SQS, migrate, app1..3
+docker-compose.test.yml          infra de teste (portas 5433/4567, Postgres em tmpfs)
+Dockerfile                       uma imagem para as três instâncias
+```
+
+`domain` não importa `@mikro-orm/*` nem `@nestjs/*` (verificado por teste de arquitetura, `TST-U-13`).
+
+## Uso de IA e SDD
+
+Este projeto foi feito com **Claude Code** (CLI da Anthropic) sob **Spec Driven Development**, conforme o [ADR-0001](specs/adr/0001-sdd-e-uso-de-ia.md). A declaração abaixo é do autor.
+
+**O que foi decisão do autor.** A arquitetura, as regras de negócio e os trade-offs: lock pessimista por wallet, a ordem canônica de locks, idempotência nas colunas de `wager_transactions`, ledger imutável por trigger, reversão única por referência (a interpretação da regra 4, [ADR-0010](specs/adr/0010-reversao-unica-por-referencia.md)), mapeamento de status HTTP, política de `PENDING_REFERENCE`, não implementar autenticação, deixar o stretch (`test:load` e demais) para depois. As decisões foram tomadas em rodadas de perguntas, cada uma com opções, comparação e recomendação, e registradas em 20 ADRs antes de qualquer código. Durante a execução, o agente parou e perguntou sempre que a spec divergia da realidade; as respostas do autor estão nos relatórios (por exemplo o vazamento de conexão do pool do MikroORM na W4, a variável `SHUTDOWN_DRAIN_DELAY_MS` na W10, a opção do Biome para decorators na W5).
+
+**O que a IA fez.** Escreveu as specs a partir das decisões do autor (requisitos com critério de aceite, design, plano de testes, tarefas) e implementou o código, os testes e esta documentação, **uma tarefa `T-xxx` por vez**, agrupadas em 12 ondas (W0–W11), com testes primeiro, um commit por tarefa (Conventional Commits, sem linha de atribuição) e um relatório por onda em [specs/waves/reports/](specs/waves/reports/).
+
+**Como foi validado.**
+- **Requisitos com teste:** cada `RF-*`/`RNF-*` cita o `TST-*` que o prova; [specs/traceability.md](specs/traceability.md) é a matriz requisito → tarefa → arquivo de teste, e `scripts/check-traceability.ts` falha se um requisito ficar sem teste ou se uma tarefa ficar aberta.
+- **Testes de verdade:** PostgreSQL e SQS reais, concorrência real (`Promise.all` e processos `Bun.spawn`), invariante `saldo = soma do ledger` ao fim de cada teste.
+- **Provas de dentes:** em cada onda, garantias críticas foram quebradas de propósito (remover o `FOR UPDATE`, o trigger, o `UNIQUE`, apagar a mensagem antes do commit…) para ver o teste correspondente falhar; os resultados estão nos relatórios.
+- **Revisão por onda:** o merge na `main` é sempre do autor, que lê o relatório da onda antes (protocolo em [specs/waves/_common.md](specs/waves/_common.md)). Dois erros da IA foram pegos na revisão: a primeira ordem de locks (inseria a transação antes de travar a wallet, o que causa deadlock por `KEY SHARE`) e a leitura literal da regra 4 (que permitiria crédito duplicado).
+- **Gate por onda:** typecheck, lint, suíte 3 vezes seguidas, varredura de `skip`/`only`, `TST-*` exigidos presentes.
+
+## Documentação
+
+- [ARCHITECTURE.md](ARCHITECTURE.md): ORM, concorrência, ordem de locks, idempotência, ledger, mensageria, interpretações do enunciado, autenticação, observabilidade, testes, limitações e evolução.
+- [specs/](specs/README.md): requisitos, design, mensageria, API, plano de testes, tarefas, ondas, [ADRs](specs/adr/), [guia de estudo](specs/study-guide.md) e [matriz de rastreabilidade](specs/traceability.md).
+
+<!-- fim da seção do candidato: abaixo, o enunciado original do desafio, sem alterações -->
+
 # Technical Challenge — Distributed Wagering Processor
 
 ## Bem-vindo à Jungle Gaming 🦧
