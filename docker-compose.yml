@@ -1,0 +1,44 @@
+# Infra de desenvolvimento: Postgres durável e emulador SQS (R-01). Os serviços app1..3 entram na T-005b (W10).
+# Subir: `docker compose up -d --wait` e depois `bun run queues:create`.
+name: wagering
+
+services:
+  postgres:
+    image: postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+    environment:
+      POSTGRES_USER: wagering
+      POSTGRES_PASSWORD: wagering # credencial fictícia, só para desenvolvimento
+      POSTGRES_DB: wagering
+    ports:
+      - "5432:5432"
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wagering -d wagering"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  sqs:
+    # R-01: LocalStack 4.14.0 é a última tag anterior a 2026.03 (exigência de auth token). Sem token, nunca.
+    image: localstack/localstack:4.14.0@sha256:3ebc37595918b8accb852f8048fef2aff047d465167edd655528065b07bc364a
+    environment:
+      SERVICES: sqs
+    ports:
+      - "4566:4566"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'curl -sf http://localhost:4566/_localstack/health | grep -Eq ''"sqs": "(available|running)"''',
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pgdata:

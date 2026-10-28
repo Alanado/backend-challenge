@@ -114,3 +114,22 @@ Script: `bun run spike:tooling` ([spikes/tooling/main.ts](../../spikes/tooling/m
 - `config-conventional` **aceita** descrições em português com acentos (`feat(wallet): adiciona validação de saldo e conciliação (T-010)`; `feat(wagering): adiciona idempotência por chave (T-031b)`) **sem ajuste**: nenhuma regra foi desligada nem alterada (`type-enum`, `type-empty`, `subject-empty`, `subject-case`, `subject-full-stop` seguem ativas e foram provadas rejeitando).
 - Única adição: a regra local `no-co-authored-by` (em `commitlint.config.mjs`) que rejeita trailer `Co-Authored-By` e linha de atribuição à ferramenta, para impor por máquina a regra do CLAUDE.md/ADR-0001.
 - Atenção para o autor: `body-max-line-length` (100) e `footer-leading-blank` continuam ativas; corpos de commit com linhas longas são rejeitados.
+
+## T-005a — Compose de infra e RAM da base (R-06)
+
+- [docker-compose.test.yml](../../docker-compose.test.yml) (projeto `wagering-test`; Postgres em `5433`, SQS em `4567`) e [docker-compose.yml](../../docker-compose.yml) (projeto `wagering`; `5432` e `4566`, dados em volume) contêm **somente** Postgres e emulador; os serviços `app1..3` entram na T-005b (W10). Os dois têm healthcheck (`pg_isready`; saúde do SQS em `/_localstack/health`).
+- Imagens fixadas por **tag e digest**: `postgres:17.6-alpine@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94` e `localstack/localstack:4.14.0@sha256:3ebc37595918b8accb852f8048fef2aff047d465167edd655528065b07bc364a`. Sem `LOCALSTACK_AUTH_TOKEN` em lugar nenhum.
+- **Postgres de teste:** `max_connections=300`; `fsync=off`, `synchronous_commit=off`, `full_page_writes=off` e dados em `tmpfs` **somente no compose de teste** (durabilidade é irrelevante lá e acelera `CREATE DATABASE … TEMPLATE`; documentado no próprio arquivo). O compose de desenvolvimento mantém a durabilidade padrão e `max_connections=200`.
+- **Armadilha do healthcheck do LocalStack:** o estado do serviço em `/_localstack/health` muda de `available` para `running` depois do primeiro uso; o healthcheck aceita os dois (com apenas `available`, o contêiner viraria `unhealthy` após ~60 s de uso).
+- [scripts/create-queues.ts](../../scripts/create-queues.ts) cria `wager-transactions-dlq.fifo`, `wager-transactions.fifo` (visibilidade 30 s, long polling 20 s, `RedrivePolicy` com `maxReceiveCount=8` para a DLQ) e `wager-events.fifo`; converge atributos por comparação e imprime `created` / `updated` / `unchanged`. Segunda execução: `unchanged` ×3, sem alterar nada (provado em `INFRA-05`). `SQS_ENDPOINT` seleciona o emulador.
+- Scripts: `test:infra:up` (compose `up -d --wait` + criação das filas; ≈7 s com as imagens já baixadas), `test:infra:down` (`down -v`), `queues:create`. Smoke: `test/integration/infra.smoke.test.ts` (5 testes; Postgres e SQS reais).
+
+### RAM com a base de pé (R-06), medida com `docker stats --no-stream` após o smoke
+
+| Contêiner | Memória |
+|---|---|
+| Postgres 17.6 (tmpfs, ocioso) | ≈75 MiB |
+| LocalStack 4.14.0 (SQS) | ≈127 MiB |
+| **Total da base** | **≈202 MiB** de 7,75 GiB |
+
+`free -m` no WSL: `used` 2172 MiB com a base de pé (a máquina já tinha ≈1,7 GB em uso antes de subir os contêineres; `buff/cache` inclui as imagens). A base cabe com enorme folga; o orçamento crítico de R-06 passa a ser as 3 instâncias da aplicação e os testes (medir na T-005b, W10).
