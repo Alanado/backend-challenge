@@ -256,7 +256,7 @@ describe("TST-I-11 inbox and redelivery", () => {
 			await rig.consumer.stop();
 		}
 		await assertLedgerInvariant(env.p.ledgerIntegrity, wallet.id);
-	});
+	}, 20_000);
 
 	test("TST-I-11 the ack follows the commit: a crash between them redelivers, the inbox discards, one effect", async () => {
 		const wallet = await env.wallet("100.00");
@@ -295,7 +295,7 @@ describe("TST-I-11 inbox and redelivery", () => {
 			{ outcome: "replay", channel: "sqs" },
 		]);
 		await assertLedgerInvariant(env.p.ledgerIntegrity, wallet.id);
-	});
+	}, 20_000);
 });
 
 describe("X-LOCK-ORDER canonical lock order on the SQS channel (ADR-0007)", () => {

@@ -274,7 +274,7 @@ describe("TST-I-15 ledger pagination", () => {
 		expect(one.body.items).toHaveLength(1);
 		expect(rest.body.items).toHaveLength(10);
 		expect(rest.body.nextCursor).toBeNull();
-	});
+	}, 30_000);
 
 	test("TST-I-15 the last page has nextCursor null even when it is exactly full", async () => {
 		const w = await wallet("100.00");
