@@ -5,7 +5,7 @@
 ## Resumo
 
 - Requisitos: 78 (72 com `TST-*`, 6 com verificação por comando ou revisão).
-- Testes do plano: 49; citados em títulos de teste: 49.
+- Testes do plano: 50; citados em títulos de teste: 50.
 - Tarefas T: 50 de 50 concluídas.
 
 ## Requisito → tarefa → teste
@@ -183,6 +183,7 @@ Tarefas = as que citam o requisito ou um dos seus testes (06-tasks). Testes = `T
 | TST-I-20 | [consumer-breaker.test.ts](../test/integration/consumer-breaker.test.ts) |
 | TST-I-21 | [reversal-reference-cross.test.ts](../test/integration/reversal-reference-cross.test.ts) |
 | TST-I-22 | [load-smoke.test.ts](../test/integration/load-smoke.test.ts) |
+| TST-I-23 | [load-strategies.test.ts](../test/integration/load-strategies.test.ts) |
 | TST-U-01 | [money.test.ts](../test/unit/shared/money.test.ts) |
 | TST-U-02 | [money.test.ts](../test/unit/shared/money.test.ts) |
 | TST-U-03 | [wallet.test.ts](../test/unit/wallet/wallet.test.ts) |

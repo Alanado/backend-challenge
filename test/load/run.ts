@@ -13,9 +13,10 @@ import { connect } from "../support/sql";
 import { createSuiteDatabase } from "../support/suite-database";
 import { createSuiteQueues } from "../support/suite-queues";
 import { environment, rssMb } from "./lib/observe";
+import { runStrategy, type StrategyResult } from "./lib/strategies";
 import { verifyConsistency, waitOutboxDrained } from "./lib/verify";
 import { PROFILES, type Profile } from "./profiles";
-import { renderTable } from "./report";
+import { renderStrategyTable, renderTable } from "./report";
 import {
 	type Context,
 	runScenario,
@@ -29,6 +30,7 @@ interface Options {
 	instances: number;
 	seed: number;
 	scenarios: string[];
+	ab: boolean;
 	overrides: Partial<Pick<Profile, "warmupMs" | "measureMs">> & {
 		concurrency?: number;
 		hotConcurrency?: number;
@@ -42,11 +44,16 @@ function parseArgs(argv: readonly string[]): Options {
 		instances: 3,
 		seed: 20261029,
 		scenarios: SCENARIOS.map((s) => s.id),
+		ab: true,
 		overrides: {},
 	};
 	const args = argv.filter((a) => a !== "--");
 	for (let i = 0; i < args.length; i++) {
 		const flag = args[i];
+		if (flag === "--skip-ab") {
+			options.ab = false;
+			continue;
+		}
 		const value = args[++i];
 		if (value === undefined) throw new Error(`${flag} needs a value`);
 		const seconds = (v: string) => Number(v) * 1000;
@@ -156,6 +163,29 @@ async function main(): Promise<number> {
 			results.push(await runScenario(scenario, ctx));
 		}
 
+		// A x C: SQL only, isolated from the application (ADR-0021).
+		const strategies: StrategyResult[] = [];
+		if (options.ab) {
+			for (let round = 0; round < profile.ab.rounds; round++) {
+				for (const strategy of ["A", "C"] as const) {
+					console.log(`running A x C round ${round + 1}: ${strategy} ...`);
+					strategies.push(
+						await runStrategy(
+							strategy,
+							{
+								url: db.url,
+								clients: profile.ab.clients,
+								attemptsPerClient: profile.ab.attemptsPerClient,
+								amount: "1.00",
+								fundedPercent: 60,
+							},
+							p,
+						),
+					);
+				}
+			}
+		}
+
 		// Whole-run verification over every wallet that exists.
 		await waitOutboxDrained(sql);
 		const all = await sql.query("select id from wallets");
@@ -183,10 +213,14 @@ async function main(): Promise<number> {
 			},
 			memory,
 			results,
+			strategies,
 			verification: { walletsChecked: all.rowCount ?? 0, violations },
 		};
 
 		console.log(`\n${renderTable(results)}\n`);
+		if (strategies.length > 0) {
+			console.log(`${renderStrategyTable(strategies)}\n`);
+		}
 		console.log(
 			`memory (RSS MB): instances ${memory.instancesRssMb.join("/")}, generator ${memory.generatorRssMb}`,
 		);
@@ -208,6 +242,15 @@ async function main(): Promise<number> {
 
 		const failures = [
 			...results.flatMap((r) => r.violations.map((v) => `${r.id}: ${v}`)),
+			...strategies.flatMap((s) =>
+				s.violations.map((v) => `A x C ${s.strategy}: ${v}`),
+			),
+			...strategies
+				.filter((s) => s.versionConflicts > 0 || s.otherErrors > 0)
+				.map(
+					(s) =>
+						`A x C ${s.strategy}: ${s.versionConflicts} version conflicts, ${s.otherErrors} errors`,
+				),
 			...violations.map((v) => `final: ${v}`),
 		];
 		if (failures.length > 0) {

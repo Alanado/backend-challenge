@@ -13,6 +13,8 @@ export interface Profile {
 	n3: { wallets: number; concurrency: number };
 	/** N4: SQS. */
 	n4: { wallets: number; messages: number; senders: number };
+	/** A x C microbenchmark: `rounds` alternating runs of each strategy. */
+	ab: { clients: number; attemptsPerClient: number; rounds: number };
 }
 
 export const PROFILES: Record<string, Profile> = {
@@ -26,6 +28,7 @@ export const PROFILES: Record<string, Profile> = {
 		n2: { concurrency: 24 },
 		n3: { wallets: 20, concurrency: 16 },
 		n4: { wallets: 10, messages: 120, senders: 10 },
+		ab: { clients: 50, attemptsPerClient: 6, rounds: 1 },
 	},
 	// ADR-0021: 10 s warm-up + 30 s measured, 200 wallets, 50 on the hot wallet.
 	full: {
@@ -37,5 +40,6 @@ export const PROFILES: Record<string, Profile> = {
 		n2: { concurrency: 50 },
 		n3: { wallets: 50, concurrency: 64 },
 		n4: { wallets: 20, messages: 3000, senders: 20 },
+		ab: { clients: 50, attemptsPerClient: 200, rounds: 3 },
 	},
 };

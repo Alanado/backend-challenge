@@ -89,7 +89,7 @@ Resultados do spike: ver [adr/0002-spike.md](adr/0002-spike.md).
 - [ ] **S-01** `bun run test:load` com metodologia, p50/p95/p99, taxa de erro, conflitos de lock, outbox lag; comparar estratégia A (pessimista) com C (`UPDATE` condicionado) em 50 concorrentes. Dividido (WS-01):
   - [x] **S-01a** biblioteca de medição (percentis, erros). *(TST-U-15)*
   - [x] **S-01b** cenários HTTP e SQS, 3 instâncias, verificação da invariante, script `test:load`. *(TST-I-22)*
-  - [ ] **S-01c** microbenchmark A × C em SQL isolado, 50 concorrentes. *(TST-I-23)*
+  - [x] **S-01c** microbenchmark A × C em SQL isolado, 50 concorrentes. *(TST-I-23)*
   - [ ] **S-01d** `LOAD-REPORT.md`, README e `ARCHITECTURE.md`.
 - [ ] **S-02** Constraint trigger `DEFERRABLE INITIALLY DEFERRED` de consistência saldo×ledger.
 - [ ] **S-03** IdP real (Keycloak/Zitadel) atrás do `ProviderIdentityPort`.

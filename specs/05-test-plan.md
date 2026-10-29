@@ -71,6 +71,7 @@ Cobertura reportada (`bun test --coverage`), **sem limite numérico**: o foco s�
 | TST-I-20 | Banco derrubado durante o consumo: breaker abre, **zero mensagens na DLQ**, consumo retoma e termina consistente | RF-MSG-07 |
 | TST-I-21 | `WIN`/`LOSS` com referência a uma `BET` já revertida (`BET → REFUND`) → `REJECTED` `REFERENCE_ALREADY_REVERSED`, saldo/`version`/ledger intactos, rejeição persistida, replay idempotente; controle: `WIN` com referência a `BET` não revertida segue `PROCESSED` | RF-TXN-11, RF-TXN-13 |
 | TST-I-22 | `bun run test:load -- --profile smoke` (3 instâncias reais, N1–N4) sai 0, imprime throughput, p50/p95/p99, taxa de erro, conflitos de lock e outbox lag, e a invariante do ledger vale em todas as wallets; sem assert de RPS | stretch S-01 |
+| TST-I-23 | Microbenchmark A (`FOR UPDATE`) × C (`UPDATE` condicionado) em SQL isolado, 50 clientes na mesma wallet: nas duas variantes saldo final = inicial − Σ débitos aceitos, nunca negativo, um lançamento por débito aceito, invariante do ledger, sem conflito de versão nem deadlock | stretch S-01, ADR-0021 |
 
 ## 5. Concorrência (paralelismo real)
 
