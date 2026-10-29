@@ -199,4 +199,4 @@ Todos os 13 unitários, 20 de integração e 12 de concorrência do [05-test-pla
 - Novos: `waves/W12-estabilizacao-e-fechamento.md`, `waves/WS-01-test-load.md`.
 - `06-tasks.md`: milestone M7 (T-070 a T-072) e S-01 dividido em S-01a a S-01d.
 - `07-waves.md`: linhas W12 e WS-01, §3.1 (calendário de quinta e sexta), status e esta seção.
-- Nenhum ADR, requisito, decisão ou a ordem de locks foi alterado. O ADR-0021 só nasce no passo 0 da WS-01, depois da resposta do autor.
+- Nenhum ADR, requisito, decisão ou a ordem de locks foi alterado. O ADR-0021 só nasce no passo 0 da WS-01, depois da resposta do autor (registrado em 2026-10-29: [adr/0021](adr/0021-teste-de-carga.md)).
