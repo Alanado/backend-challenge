@@ -87,7 +87,7 @@ Resultados do spike: ver [adr/0002-spike.md](adr/0002-spike.md).
 ## Stretch (só com M0–M5 verdes, nesta ordem; no baseline de 2026-10-29 só o S-01 será feito)
 
 - [ ] **S-01** `bun run test:load` com metodologia, p50/p95/p99, taxa de erro, conflitos de lock, outbox lag; comparar estratégia A (pessimista) com C (`UPDATE` condicionado) em 50 concorrentes. Dividido (WS-01):
-  - [ ] **S-01a** biblioteca de medição (percentis, erros). *(TST-U-15)*
+  - [x] **S-01a** biblioteca de medição (percentis, erros). *(TST-U-15)*
   - [ ] **S-01b** cenários HTTP e SQS, 3 instâncias, verificação da invariante, script `test:load`. *(TST-I-22)*
   - [ ] **S-01c** microbenchmark A × C em SQL isolado, 50 concorrentes. *(TST-I-23)*
   - [ ] **S-01d** `LOAD-REPORT.md`, README e `ARCHITECTURE.md`.
