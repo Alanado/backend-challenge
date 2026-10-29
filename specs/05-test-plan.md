@@ -68,6 +68,7 @@ Cobertura reportada (`bun test --coverage`), **sem limite numérico**: o foco s�
 | TST-I-18 | `SIGTERM` com mensagens em voo: nenhuma perdida, readiness falha, handlers concluem ou devolvem | RF-MSG-06 |
 | TST-I-19 | Criar wallet: saldo inicial gera `OPENING`+ledger+evento; saldo zero não gera; duplicada → 409; `version = 1` | RF-WAL-01/02 |
 | TST-I-20 | Banco derrubado durante o consumo: breaker abre, **zero mensagens na DLQ**, consumo retoma e termina consistente | RF-MSG-07 |
+| TST-I-21 | `WIN`/`LOSS` com referência a uma `BET` já revertida (`BET → REFUND`) → `REJECTED` `REFERENCE_ALREADY_REVERSED`, saldo/`version`/ledger intactos, rejeição persistida, replay idempotente; controle: `WIN` com referência a `BET` não revertida segue `PROCESSED` | RF-TXN-11, RF-TXN-13 |
 
 ## 5. Concorrência (paralelismo real)
 

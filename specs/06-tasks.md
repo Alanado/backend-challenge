@@ -81,7 +81,7 @@ Resultados do spike: ver [adr/0002-spike.md](adr/0002-spike.md).
 > Planejado em 2026-10-29 a partir da análise de prontidão. `scripts/check-traceability.ts` acusa estas tarefas como abertas até a W12 terminar (esperado).
 
 - [x] **T-070** Timeout padrão global de teste (30 s) e `TST-U-14`; corrige a classe de falha por margem de tempo (I-11, I-15, I-16). *(RNF-01; sem requisito novo)*
-- [ ] **T-071** `TST-I-21`: `WIN`/`LOSS` com referência a `BET` já revertida → `REJECTED REFERENCE_ALREADY_REVERSED`. *(RF-TXN-11, RF-TXN-13)*
+- [x] **T-071** `TST-I-21`: `WIN`/`LOSS` com referência a `BET` já revertida → `REJECTED REFERENCE_ALREADY_REVERSED`. *(RF-TXN-11, RF-TXN-13)*
 - [ ] **T-072** Documenta a interpretação confirmada (10) e a estabilização em `ARCHITECTURE.md` e `01-requirements.md` §12.
 
 ## Stretch (só com M0–M5 verdes, nesta ordem; no baseline de 2026-10-29 só o S-01 será feito)

@@ -36,9 +36,9 @@ Cada requisito tem critério de aceite verificável e o teste que o prova (IDs e
 | RF-TXN-08 | Valor da reversão é **igual** ao da referência | Diferente → `REJECTED` `REVERSAL_AMOUNT_MISMATCH` | §7.5 | TST-I-09 |
 | RF-TXN-09 | Reversão que deixaria saldo negativo é rejeitada com código distinto | `REJECTED` `REVERSAL_WOULD_OVERDRAW`, auditável, sem ledger | §7.9 | TST-I-08 |
 | RF-TXN-10 | `REJECTED` persiste a transação sem alterar saldo nem gerar ledger | Linha com `failure_code`; `version` inalterada | §6.4, §7.6 | TST-I-06 |
-| RF-TXN-11 | Referência resolvida por (`providerId`, `referenceExternalTransactionId`) **sem filtro de wallet**; depois valida kind permitido, mesma wallet/player/moeda/rodada, status e se já foi revertida | Códigos: `REFERENCE_KIND_NOT_ALLOWED`, `REFERENCE_MISMATCH`, `REFERENCE_NOT_PROCESSED`, `REFERENCE_ALREADY_REVERSED`; ordem de checagem em 02-design §5 | §7.2–7.4 | TST-I-09 |
+| RF-TXN-11 | Referência resolvida por (`providerId`, `referenceExternalTransactionId`) **sem filtro de wallet**; depois valida kind permitido, mesma wallet/player/moeda/rodada, status e se já foi revertida | Códigos: `REFERENCE_KIND_NOT_ALLOWED`, `REFERENCE_MISMATCH`, `REFERENCE_NOT_PROCESSED`, `REFERENCE_ALREADY_REVERSED`; ordem de checagem em 02-design §5 | §7.2–7.4 | TST-I-09, TST-I-21 |
 | RF-TXN-12 | Toda rejeição/falha carrega `failureCode` do catálogo estável | Valores somente do enum de 04-api §4 | §7.2 | TST-I-06, TST-U-11 |
-| RF-TXN-13 | No máximo **uma** reversão `PROCESSED` por transação referenciada, de qualquer tipo | `BET → REFUND ✔ → ROLLBACK da mesma BET` = `REJECTED` `REFERENCE_ALREADY_REVERSED`, saldo permanece 100,00; índice único parcial no schema | §3, §7.4, ADR-0010 | TST-I-08, TST-C-11 |
+| RF-TXN-13 | No máximo **uma** reversão `PROCESSED` por transação referenciada, de qualquer tipo | `BET → REFUND ✔ → ROLLBACK da mesma BET` = `REJECTED` `REFERENCE_ALREADY_REVERSED`, saldo permanece 100,00; índice único parcial no schema | §3, §7.4, ADR-0010 | TST-I-08, TST-I-21, TST-C-11 |
 
 ## 4. Ledger
 
