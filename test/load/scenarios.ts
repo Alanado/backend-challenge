@@ -54,6 +54,7 @@ export interface ScenarioResult {
 	latency: LatencySummary;
 	statuses: Record<string, number>;
 	unexpectedErrors: number;
+	recoveredResets: number;
 	errorRate: number;
 	lockConflicts: number;
 	idempotentRequests: number;
@@ -347,6 +348,7 @@ export async function runScenario(
 		latency: summary,
 		statuses: body.tally.byStatus(),
 		unexpectedErrors: body.tally.unexpected,
+		recoveredResets: body.tally.recoveredResets,
 		errorRate: body.tally.errorRate,
 		lockConflicts: metrics.lockConflicts,
 		idempotentRequests: metrics.idempotentRequests,

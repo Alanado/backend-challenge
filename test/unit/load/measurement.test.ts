@@ -132,6 +132,18 @@ describe("TST-U-15 load measurement", () => {
 			expect(new OutcomeTally().errorRate).toBe(0);
 		});
 
+		test("TST-U-15 a reset recovered by retry is counted apart and is not an error", () => {
+			const tally = new OutcomeTally();
+			tally.add({ kind: "http", status: 201, recovered: true });
+			tally.add({ kind: "http", status: 201 });
+			expect(tally.recoveredResets).toBe(1);
+			expect(tally.unexpected).toBe(0);
+			const other = new OutcomeTally();
+			other.add({ kind: "http", status: 200, recovered: true });
+			tally.merge(other);
+			expect(tally.recoveredResets).toBe(2);
+		});
+
 		test("TST-U-15 merges tallies", () => {
 			const a = new OutcomeTally();
 			const b = new OutcomeTally();

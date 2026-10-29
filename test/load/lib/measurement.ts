@@ -66,7 +66,8 @@ export class LatencyRecorder {
 }
 
 export type Outcome =
-	| { kind: "http"; status: number }
+	/** `recovered`: a connection reset was retried once with the same Idempotency-Key and the retry answered. */
+	| { kind: "http"; status: number; recovered?: true }
 	| { kind: "timeout" }
 	| { kind: "connection" };
 
@@ -79,6 +80,7 @@ export class OutcomeTally {
 	private readonly counts = new Map<string, number>();
 	private readonly expectedStatuses: ReadonlySet<number>;
 	private expectedCount = 0;
+	private recoveredCount = 0;
 	private unexpectedCount = 0;
 
 	constructor(expectedStatuses: readonly number[] = [422]) {
@@ -93,6 +95,11 @@ export class OutcomeTally {
 		return this.unexpectedCount;
 	}
 
+	/** Connection resets that the generator retried successfully (reported, never hidden). */
+	get recoveredResets(): number {
+		return this.recoveredCount;
+	}
+
 	get errorRate(): number {
 		return this.total === 0 ? 0 : this.unexpectedCount / this.total;
 	}
@@ -105,6 +112,9 @@ export class OutcomeTally {
 			outcome.kind === "http" &&
 			((outcome.status >= 200 && outcome.status < 300) ||
 				this.expectedStatuses.has(outcome.status));
+		if (outcome.kind === "http" && outcome.recovered === true) {
+			this.recoveredCount++;
+		}
 		if (expected) this.expectedCount++;
 		else this.unexpectedCount++;
 	}
@@ -115,6 +125,7 @@ export class OutcomeTally {
 		}
 		this.expectedCount += other.expectedCount;
 		this.unexpectedCount += other.unexpectedCount;
+		this.recoveredCount += other.recoveredCount;
 	}
 
 	byStatus(): Record<string, number> {
