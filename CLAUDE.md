@@ -40,6 +40,7 @@ bun run format                 # biome format --write
 bun run test:unit
 bun run test:infra:up          # Postgres (5433) + LocalStack SQS (4567) de teste + cria as filas; idempotente
 bun run test:infra:down        # derruba e apaga os volumes
+bun run test:load              # carga (S-01, ADR-0021): 3 instâncias reais + A×C em SQL; `-- --profile smoke` ~15 s; fora de `bun run test`
 bun run test:integration       # exige test:infra:up
 bun run test:concurrency       # paralelismo real e 3 processos da aplicação (exige test:infra:up)
 bun run test                   # unit + integration + concurrency
@@ -53,8 +54,6 @@ docker compose up --build -d --wait   # app1..3 (3001-3003) + migrate + Postgres
 bun run compose:smoke          # com o Compose completo no ar: wallet, BET por cada instância, saldo, ledger, reconciliação
 bun scripts/check-readme-commands.ts | check-architecture.ts | check-traceability.ts   # conferidores de documentação (W11)
 
-# a criar:
-bun run test:load              # stretch (S-01)
 ```
 
 Ferramentas ativas: Biome (`biome.jsonc`; `noFloatingPromises` em `error`, `useImportType` desligada de propósito por causa da DI do Nest) e commitlint (hook `.githooks/commit-msg`; rejeita tipo inválido, assunto vazio/capitalizado/com ponto final e trailer `Co-Authored-By`).

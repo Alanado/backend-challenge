@@ -257,7 +257,7 @@ Tarefas = as que citam o requisito ou um dos seus testes (06-tasks). Testes = `T
 
 Fora do escopo obrigatório; nenhum requisito RF/RNF depende destas tarefas. A linha de corte (M4) não foi usada: todas as tarefas T, inclusive a T-044, estão concluídas.
 
-- **S-01** `bun run test:load` com metodologia, p50/p95/p99, taxa de erro, conflitos de lock, outbox lag; comparar estratégia A (pessimista) com C (`UPDATE` condicionado) em 50 concorrentes. Dividido (WS-01): — não implementado, documentado
+- **S-01** `bun run test:load` com metodologia, p50/p95/p99, taxa de erro, conflitos de lock, outbox lag; comparar estratégia A (pessimista) com C (`UPDATE` condicionado) em 50 concorrentes. Dividido (WS-01): — concluído
 - **S-02** Constraint trigger `DEFERRABLE INITIALLY DEFERRED` de consistência saldo×ledger. — não implementado, documentado
 - **S-03** IdP real (Keycloak/Zitadel) atrás do `ProviderIdentityPort`. — não implementado, documentado
 - **S-04** Swagger/OpenAPI a partir dos schemas Zod. — não implementado, documentado
