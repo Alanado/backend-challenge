@@ -35,7 +35,9 @@ Tamanho = estimativa grosseira de tempo de sessão, **sem** contar a sua revisã
 | W9 | Consumidor SQS | T-041, T-042a, T-042b, T-044 | W7 (independe da W8) | `wave/w9` | G | [W9](waves/W9-consumidor-sqs.md) |
 | W10 | Multi-instância e ciclo de vida | T-052, T-046, T-053, T-005b (nesta ordem) | W8 + W9 | `wave/w10` | G | [W10](waves/W10-multi-instancia-e-ciclo-de-vida.md) |
 | W11 | Documentação e hardening | T-060, T-061, T-062, T-063 | W10 | `wave/w11` | M | [W11](waves/W11-docs-e-hardening.md) |
+| W12 | Estabilização e fechamento de interpretação | T-070, T-071, T-072 | W11 | `wave/w12` | P | [W12](waves/W12-estabilizacao-e-fechamento.md) |
 | WS | Stretch (opcional) | S-01 … S-06 | W11 (ou W10 se sobrar tempo) | uma por item | — | [WS](waves/WS-stretch.md) |
+| WS-01 | `test:load` (único stretch aprovado) | S-01a … S-01d | W12 | `wave/ws-01` | M | [WS-01](waves/WS-01-test-load.md) |
 
 Soma estimada: ~36 h de sessão (menos ~2,5 h de sobreposição da janela paralela). **A folga real é próxima de zero**; por isso existem os checkpoints e a linha de corte (§6).
 
@@ -49,6 +51,19 @@ Soma estimada: ~36 h de sessão (menos ~2,5 h de sobreposição da janela parale
 | **Sex** | W9 → W10 → W11 | **CP3 (meio da sex):** W9 verde; senão corta T-044. **CP4 (congelamento de código):** W10 verde, só docs depois |
 
 Observação sobre o corte interno: pela recomendação inicial o código congelaria na quinta à noite, mas o conteúdo de M4 (W9 e W10) só cabe na sexta. O congelamento real vira "W10 verde", e a sexta à tarde fica para W11. Se CP2 estiver atrasado, a primeira alavanca é a segunda janela paralela (§5, contingência).
+
+### 3.1 Replanejamento de 2026-10-29 (quinta)
+
+W0–W11 terminaram na quarta, um dia antes do previsto. A análise de prontidão achou uma instabilidade de teste (`TST-I-16`) e uma interpretação sem teste. Decisões do autor, nas opções recomendadas: **W12** (estabilizar com timeout global e cobrir o cruzamento `WIN`/`LOSS` × reversão), **só o S-01** do stretch (S-02 a S-06 ficam como evolução documentada), sem alterar `src/`.
+
+| Quando | O quê | Checkpoint (você decide) |
+|---|---|---|
+| **Qui, início da tarde** | W12 (≈ 1 h) → merge na `main` | **CP5:** `bun run test` 3× verde, `git diff main -- src` vazio |
+| **Qui, tarde até 22:00** | WS-01 (passo 0 → ADR-0021 → S-01a…d) | **CP6 (22:00, limite duro):** gate verde → merge; senão **não mergeia**, vale a entrega sem o stretch |
+| **Sex, manhã** | Gate de entrega: clone limpo, README literal, `bun run test` 3×, `compose:smoke`, três conferidores, relatório final | **CP7:** `main` == `origin/main` == o que será entregue |
+| **Sex, resto** | Estudo da apresentação ([study-guide](study-guide.md)); **nenhum código novo** | — |
+
+Regra de congelamento: depois do CP6 só entram correções de documentação. Qualquer falha nova no gate de sexta é investigada, não "consertada às pressas".
 
 ## 4. Grafo de dependências
 
@@ -168,7 +183,8 @@ Todos os 13 unitários, 20 de integração e 12 de concorrência do [05-test-pla
 
 | Onda | Status |
 |---|---|
-| W0 … W11, WS | ☐ nenhuma iniciada |
+| W0 … W11 | ☑ concluídas e mergeadas (relatórios em `waves/reports/`) |
+| W12, WS-01 | ☐ planejadas em 2026-10-29 |
 
 ## 11. O que esta sessão de planejamento mudou nas specs
 
@@ -177,3 +193,10 @@ Todos os 13 unitários, 20 de integração e 12 de concorrência do [05-test-pla
 - `specs/README.md`: índice com `07-waves.md`.
 - Novos: este arquivo, `waves/_common.md`, `waves/W*.md`.
 - Nenhum ADR, requisito, decisão ou a ordem de locks foi alterado.
+
+## 12. O que a sessão de replanejamento de 2026-10-29 mudou nas specs
+
+- Novos: `waves/W12-estabilizacao-e-fechamento.md`, `waves/WS-01-test-load.md`.
+- `06-tasks.md`: milestone M7 (T-070 a T-072) e S-01 dividido em S-01a a S-01d.
+- `07-waves.md`: linhas W12 e WS-01, §3.1 (calendário de quinta e sexta), status e esta seção.
+- Nenhum ADR, requisito, decisão ou a ordem de locks foi alterado. O ADR-0021 só nasce no passo 0 da WS-01, depois da resposta do autor.

@@ -76,9 +76,21 @@ Resultados do spike: ver [adr/0002-spike.md](adr/0002-spike.md).
 - [x] **T-062** Revisão de rastreabilidade: matriz requisito → tarefa → teste sem buracos; `study-guide.md` atualizado com o que mudou na implementação.
 - [x] **T-063** Passada final: suíte completa 3× seguidas (flakiness), cobertura, `docker compose up` do zero.
 
-## Stretch (só com M0–M5 verdes, nesta ordem)
+## M7 — Estabilização e fechamento (quinta 29/10, onda W12)
 
-- [ ] **S-01** `bun run test:load` com metodologia, p50/p95/p99, taxa de erro, conflitos de lock, outbox lag; comparar estratégia A (pessimista) com C (`UPDATE` condicionado) em 50 concorrentes.
+> Planejado em 2026-10-29 a partir da análise de prontidão. `scripts/check-traceability.ts` acusa estas tarefas como abertas até a W12 terminar (esperado).
+
+- [ ] **T-070** Timeout padrão global de teste (30 s) e `TST-U-14`; corrige a classe de falha por margem de tempo (I-11, I-15, I-16). *(RNF-01; sem requisito novo)*
+- [ ] **T-071** `TST-I-21`: `WIN`/`LOSS` com referência a `BET` já revertida → `REJECTED REFERENCE_ALREADY_REVERSED`. *(RF-TXN-11, RF-TXN-13)*
+- [ ] **T-072** Documenta a interpretação confirmada (10) e a estabilização em `ARCHITECTURE.md` e `01-requirements.md` §12.
+
+## Stretch (só com M0–M5 verdes, nesta ordem; no baseline de 2026-10-29 só o S-01 será feito)
+
+- [ ] **S-01** `bun run test:load` com metodologia, p50/p95/p99, taxa de erro, conflitos de lock, outbox lag; comparar estratégia A (pessimista) com C (`UPDATE` condicionado) em 50 concorrentes. Dividido (WS-01):
+  - [ ] **S-01a** biblioteca de medição (percentis, erros). *(TST-U-15)*
+  - [ ] **S-01b** cenários HTTP e SQS, 3 instâncias, verificação da invariante, script `test:load`. *(TST-I-22)*
+  - [ ] **S-01c** microbenchmark A × C em SQL isolado, 50 concorrentes. *(TST-I-23)*
+  - [ ] **S-01d** `LOAD-REPORT.md`, README e `ARCHITECTURE.md`.
 - [ ] **S-02** Constraint trigger `DEFERRABLE INITIALLY DEFERRED` de consistência saldo×ledger.
 - [ ] **S-03** IdP real (Keycloak/Zitadel) atrás do `ProviderIdentityPort`.
 - [ ] **S-04** Swagger/OpenAPI a partir dos schemas Zod.

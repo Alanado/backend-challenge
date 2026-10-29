@@ -25,6 +25,8 @@ A suíte completa existente não pode regredir. Ao final: gate, specs/waves/repo
 
 ## S-01 — `bun run test:load`
 
+> **Detalhado em [WS-01-test-load.md](WS-01-test-load.md)** (replanejamento de 2026-10-29: único stretch aprovado, com limite duro e recomendações do passo 0).
+
 **Valor:** diferencial citado no enunciado (§14: "teste de carga também conta como diferencial"). Qualidade do experimento e honestidade da análise pesam mais que o número bruto; não há meta de RPS.
 
 **Leitura:** README do desafio §14 (último parágrafo) · [ADR-0006](../adr/0006-concorrencia-lock-pessimista.md) (alternativas A e C) · [ADR-0014](../adr/0014-outbox-e-eventos.md) · [04-api.md](../04-api.md) §7 (métricas) · [05-test-plan.md](../05-test-plan.md) §1 · Compose completo da W10.
