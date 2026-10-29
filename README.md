@@ -60,7 +60,7 @@ bun run test:infra:down             # derruba a infra de teste e apaga os dados
 - Cada suíte cria um **banco novo** a partir de um template já migrado e **filas com sufixo aleatório**; não há `TRUNCATE` (os triggers do ledger o bloqueiam) nem `sleep` fixo (os testes esperam com `eventually`).
 - Todo teste que toca uma wallet termina chamando `assertLedgerInvariant`: saldo = soma do ledger, cadeia contínua, saldo ≥ 0, `version` coerente.
 - Os títulos dos testes carregam o ID do plano (`TST-U-01`, `TST-I-05`, `TST-C-04`…). A matriz requisito → tarefa → teste está em [specs/traceability.md](specs/traceability.md) (gerada por `bun scripts/check-traceability.ts`).
-- Cobertura, sem limite numérico (o foco são os caminhos críticos): `bun test --coverage test/unit` (sem infra) ou `bun test --coverage` (tudo, com `test:infra:up`).
+- Cobertura, sem limite numérico (o foco são os caminhos críticos): `bun test --coverage test/unit` (sem infra; 83,56 % das linhas na W11). Rode **uma pasta por vez**: `bun test --coverage` sem pasta junta as três suítes num só processo e elas interferem entre si. Com `--coverage`, os testes de integração e concorrência (que sobem processos filhos) ficam mais lentos e podem estourar timeout, então esses números são apenas indicativos.
 - **Teste de carga (`test:load`, stretch S-01): não foi implementado.**
 
 Conferências de documentação (saem com 1 no primeiro desvio):
