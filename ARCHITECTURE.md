@@ -312,7 +312,7 @@ Observações: rotas inexistentes respondem com o corpo padrão do Nest (JSON, n
 
 ## 10. Interpretações do enunciado
 
-O §7 do enunciado permite interpretações adicionais desde que documentadas ([01-requirements §12](specs/01-requirements.md)). As nove adotadas:
+O §7 do enunciado permite interpretações adicionais desde que documentadas ([01-requirements §12](specs/01-requirements.md)). As dez adotadas:
 
 1. **Uma reversão por referência, de qualquer tipo** ([ADR-0010](specs/adr/0010-reversao-unica-por-referencia.md)), detalhada abaixo.
 2. **`externalTransactionId` único por provedor**, necessário para resolver referências sem ambiguidade ([ADR-0008](specs/adr/0008-idempotencia.md)).
@@ -323,6 +323,7 @@ O §7 do enunciado permite interpretações adicionais desde que documentadas ([
 7. **`PENDING` nunca é observável por fora** (nasce e termina na mesma transação SQL).
 8. **Rejeição de negócio persiste** a transação (auditoria), inclusive divergência de player ou moeda da wallet; só wallet inexistente e payload inválido não são persistidos.
 9. **Resolução da referência sem filtro de wallet**, para devolver `REFERENCE_MISMATCH` (terminal) em vez de esperar o backoff inteiro e terminar em `REFERENCE_NOT_FOUND`.
+10. **`WIN`/`LOSS` com referência a uma transação já revertida são `REJECTED` `REFERENCE_ALREADY_REVERSED`**: a checagem de "já revertida" vale para qualquer comando com referência, não só para reversões. Confirmada pelo autor em 2026-10-29; o `WIN`/`LOSS` rejeitado é persistido (auditável) e não mexe em saldo, `version` nem ledger. Prova: `TST-I-21` (`BET → REFUND → WIN`/`LOSS` rejeitados, replay idempotente e controle com `BET` não revertida).
 
 **Em destaque: a regra 4 × reversão única.**
 
@@ -423,7 +424,8 @@ Lista honesta, em duas partes. Nada do escopo obrigatório foi cortado: M0 a M5 
 - **Workaround do pool (W4).** Com MikroORM 7.2.5/Kysely, se a conexão morre no meio de `em.transactional`, o `ROLLBACK` falha e o cliente não volta ao pool (reproduzido com `em.transactional` puro). [pg-pool-reaper.ts](src/modules/platform/infrastructure/pg-pool-reaper.ts) libera os clientes mortos usando **membros privados** de `pg`/`pg-pool`; foi aprovado pelo autor e deve ser **removido quando o upstream corrigir**.
 - **Reconciliação em uma instrução SQL** em vez de transação `REPEATABLE READ READ ONLY` (seção 6).
 - **`wager_transactions_total` não conta** o desfecho de uma pendência resolvida ou rejeitada pelo worker: o label `channel` só admite `http|sqs` e contar exigiria um terceiro valor (mudança no contrato do 04-api §7). A entrada inicial como `PENDING_REFERENCE` é contada na chegada.
-- **`REFERENCE_ALREADY_REVERSED` vale para qualquer comando com referência**, inclusive `WIN`/`LOSS` que apontam para uma `BET` já revertida (o design §5 não restringe a reversões). Não há teste dedicado a esse cruzamento; **aguarda confirmação do autor**.
+- **Interpretação 10 confirmada (2026-10-29):** `REFERENCE_ALREADY_REVERSED` vale para qualquer comando com referência, inclusive `WIN`/`LOSS` que apontam para uma `BET` já revertida; a regra foi movida para a seção 10 e tem teste dedicado (`TST-I-21`). Restringi-la a reversões exigiria ADR e mexeria no núcleo financeiro.
+- **Timeout padrão global dos testes (W12):** `test:integration` e `test:concurrency` rodam com `--timeout 30000` (`[test] timeout` do `bunfig.toml` não é honrado pelo Bun 1.4.4, medido na T-070). Existe como margem para máquinas lentas: testes com cooldown do breaker e ciclo de backoff reais levam segundos e estouraram os 5 s padrão de forma intermitente (`TST-I-11`, `I-15`, `I-16`). Não é licença para testes lentos novos; `TST-U-14` impede que a configuração seja removida. Não consegui reproduzir a falha sob CPU saturada, então a relação causal é inferida das margens de tempo, não provada.
 - **Logs:** no `409` de wallet duplicada, o log de acesso traz o `walletId` da tentativa **não persistida** (gerado antes do `INSERT`); inofensivo, mas enganoso para diagnóstico.
 - **Não há teste automático do `503` vindo de uma falha real do banco no HTTP**: o mapeamento está coberto com erros reais da aplicação lançados por controllers descartáveis, a tradução do driver tem teste próprio, e a queda real do banco é testada no consumidor (`TST-I-20`).
 - **Falha intermitente não reproduzida (W9):** um teste de integração, de nome não capturado, falhou em 2 de 3 rodadas do primeiro gate da W9 e não voltou em 6 execuções completas nem nas 3 do gate da W10. Nada foi relaxado para escondê-la.

@@ -146,3 +146,4 @@ Cada requisito tem critério de aceite verificável e o teste que o prova (IDs e
 7. **`PENDING` nunca é observável por fora** (nasce e termina na mesma transação SQL).
 8. **Rejeição de negócio persiste** a transação (auditoria), inclusive divergência de player/moeda da wallet; só wallet inexistente e payload inválido não são persistidos.
 9. **Resolução da referência sem filtro de wallet**, para devolver `REFERENCE_MISMATCH` (terminal) em vez de esperar o backoff inteiro e terminar em `REFERENCE_NOT_FOUND`.
+10. **`WIN`/`LOSS` com referência a uma transação já revertida são `REJECTED` `REFERENCE_ALREADY_REVERSED`** (a checagem vale para qualquer comando com referência). Confirmada pelo autor em 2026-10-29; nenhum ADR muda. TST-I-21.

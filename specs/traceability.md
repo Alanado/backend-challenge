@@ -6,7 +6,7 @@
 
 - Requisitos: 78 (72 com `TST-*`, 6 com verificação por comando ou revisão).
 - Testes do plano: 47; citados em títulos de teste: 47.
-- Tarefas T: 49 de 50 concluídas.
+- Tarefas T: 50 de 50 concluídas.
 
 ## Requisito → tarefa → teste
 
@@ -248,7 +248,7 @@ Tarefas = as que citam o requisito ou um dos seus testes (06-tasks). Testes = `T
 - [x] **T-063** Passada final: suíte completa 3× seguidas (flakiness), cobertura, `docker compose up` do zero.
 - [x] **T-070** Timeout padrão global de teste (30 s) e `TST-U-14`; corrige a classe de falha por margem de tempo (I-11, I-15, I-16). *(RNF-01; sem requisito novo)*
 - [x] **T-071** `TST-I-21`: `WIN`/`LOSS` com referência a `BET` já revertida → `REJECTED REFERENCE_ALREADY_REVERSED`. *(RF-TXN-11, RF-TXN-13)*
-- [ ] **T-072** Documenta a interpretação confirmada (10) e a estabilização em `ARCHITECTURE.md` e `01-requirements.md` §12.
+- [x] **T-072** Documenta a interpretação confirmada (10) e a estabilização em `ARCHITECTURE.md` e `01-requirements.md` §12.
 
 ## Não implementado, documentado (stretch)
 
