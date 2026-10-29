@@ -42,6 +42,7 @@ Cobertura reportada (`bun test --coverage`), **sem limite numérico**: o foco s�
 | TST-U-11 | Classificação de erros (negócio/transitório/infra/permanente) por código Postgres e erro de SQS | RF-MSG-04 |
 | TST-U-12 | Redação de logs: valores, saldos, payload, `playerId`, `roundId` nunca aparecem | RF-OBS-02 |
 | TST-U-13 | Arquitetura: `domain` e `shared` sem `@mikro-orm/*` e `@nestjs/*`; `application` sem `infrastructure` | RF-MNY-05 |
+| TST-U-14 | Ferramenta: `test:integration` e `test:concurrency` fixam timeout padrão de teste ≥ 20 000 ms (margem para máquinas lentas) | RNF-01 |
 
 ## 4. Integração
 
