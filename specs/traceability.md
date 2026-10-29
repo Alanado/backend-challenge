@@ -5,7 +5,7 @@
 ## Resumo
 
 - Requisitos: 78 (72 com `TST-*`, 6 com verificação por comando ou revisão).
-- Testes do plano: 47; citados em títulos de teste: 47.
+- Testes do plano: 49; citados em títulos de teste: 49.
 - Tarefas T: 50 de 50 concluídas.
 
 ## Requisito → tarefa → teste
@@ -182,6 +182,7 @@ Tarefas = as que citam o requisito ou um dos seus testes (06-tasks). Testes = `T
 | TST-I-19 | [problem-details.test.ts](../test/integration/problem-details.test.ts), [wallet-creation.test.ts](../test/integration/wallet-creation.test.ts) |
 | TST-I-20 | [consumer-breaker.test.ts](../test/integration/consumer-breaker.test.ts) |
 | TST-I-21 | [reversal-reference-cross.test.ts](../test/integration/reversal-reference-cross.test.ts) |
+| TST-I-22 | [load-smoke.test.ts](../test/integration/load-smoke.test.ts) |
 | TST-U-01 | [money.test.ts](../test/unit/shared/money.test.ts) |
 | TST-U-02 | [money.test.ts](../test/unit/shared/money.test.ts) |
 | TST-U-03 | [wallet.test.ts](../test/unit/wallet/wallet.test.ts) |
@@ -196,6 +197,7 @@ Tarefas = as que citam o requisito ou um dos seus testes (06-tasks). Testes = `T
 | TST-U-12 | [log-redaction.test.ts](../test/unit/platform/log-redaction.test.ts) |
 | TST-U-13 | [architecture.test.ts](../test/unit/architecture.test.ts) |
 | TST-U-14 | [test-timeout.test.ts](../test/unit/tooling/test-timeout.test.ts) |
+| TST-U-15 | [measurement.test.ts](../test/unit/load/measurement.test.ts) |
 
 ## Tarefas
 

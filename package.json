@@ -8,6 +8,7 @@
 		"lint": "biome check .",
 		"format": "biome format --write .",
 		"test:unit": "bun test test/unit",
+		"test:load": "bun test/load/run.ts",
 		"test:integration": "bun test --timeout 30000 test/integration",
 		"test:concurrency": "bun test --timeout 30000 --pass-with-no-tests test/concurrency",
 		"test": "bun run test:unit && bun run test:integration && bun run test:concurrency",
