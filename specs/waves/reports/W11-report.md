@@ -1,6 +1,6 @@
 # Relatório W11 — Documentação e hardening
 - Data/hora: 2026-10-28 · branch `wave/w11` · HEAD das tarefas: `3da0b8c` (o relatório é o commit seguinte)
-- **Veredito: PARCIAL.** As 4 tarefas estão commitadas, os 3 conferidores passam e têm dentes, o Compose do zero e o smoke passam, `git diff main -- src` está vazio. **O gate 2 (`bun run test` 3× seguidas verde) NÃO foi satisfeito**: dois testes de integração da W10 (TST-I-11 e TST-I-15) são intermitentes. Código e testes não foram tocados (fora do escopo); a decisão é do autor (ver Perguntas).
+- **Veredito: VERDE após o addendum no fim deste arquivo** (a versão original abaixo era PARCIAL). As 4 tarefas estão commitadas, os 3 conferidores passam e têm dentes, o Compose do zero e o smoke passam, `git diff main -- src` está vazio. **O gate 2 (`bun run test` 3× seguidas verde) NÃO foi satisfeito**: dois testes de integração da W10 (TST-I-11 e TST-I-15) são intermitentes. Código e testes não foram tocados (fora do escopo); a decisão é do autor (ver Perguntas).
 
 Nota de retomada: uma sessão anterior já havia feito os 4 commits (T-060 a T-063) mas não deixou relatório nem evidência do gate. Esta sessão verificou o estado (árvore limpa, tarefas `[x]`), refez o gate inteiro e escreveu este relatório.
 
@@ -106,3 +106,10 @@ Também aguarda decisão: atualizar o `CLAUDE.md` (comandos "a criar").
 
 ## Pré-condições para a entrega
 Documentação, conferidores, rastreabilidade e Compose prontos; falta só decidir a estabilização dos dois testes intermitentes (e rodar o gate 2 de novo) para declarar o projeto pronto.
+
+## Addendum — resolução das perguntas (autor aprovou as três: sim)
+- `9449e80` `test(integration)`: timeout explícito de 20 s nos dois testes TST-I-11 que dependem do ciclo falha de lock → backoff → reentrega, e de 30 s no primeiro teste do TST-I-15 (210 `BET`s). Só testes; `git diff main -- src` continua vazio. Lógica e asserts inalterados.
+- `0983dd9` `docs(readme)`: comando de cobertura corrigido (uma pasta por vez; integração/concorrência sob `--coverage` são indicativas).
+- `cd9918b` `docs(claude)`: `CLAUDE.md` com `docker compose up --build`, `compose:smoke`, conferidores e `test:concurrency` atualizados.
+- Verificação: os dois arquivos de teste 8× cada, sem falha (16 execuções, 0 fail). `bun run test` 3× seguidas: **verdes** (cada uma: unit 522/0, integração 472/0, concorrência 21/0; 165 s, 168 s, 178 s; 0 skip). `typecheck`, `lint` e os conferidores de arquitetura/rastreabilidade ok.
+- Execuções descartadas (registro): numa série anterior, a run 2 falhou em `TST-C-07 … two active workers, repeated` (concorrência) enquanto o WSL era suspenso (relógio do sistema saltou ≈ 10 h; o Bun reportou 34 851 s para a suíte). Não repeti o diagnóstico: as 3 execuções seguidas acima passaram, mas **não provei** que a causa foi a suspensão; se C-07 voltar a falhar fora de suspensão, tratar como nova instabilidade.
