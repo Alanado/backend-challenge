@@ -1,4 +1,4 @@
-# Distributed Wagering Processor — solução do candidato
+# Distributed Wagering Processor — Solução
 
 Serviço financeiro distribuído que processa transações de apostas (`BET`, `WIN`, `LOSS`, `REFUND`, `ROLLBACK`) vindas de provedores por HTTP e por SQS, e permanece correto com mensagens duplicadas, fora de ordem, concorrentes e com várias instâncias. Stack: Bun 1.4 · TypeScript estrito · NestJS · MikroORM · PostgreSQL 17 · SQS (LocalStack 4.14, sem token) · Docker Compose.
 
