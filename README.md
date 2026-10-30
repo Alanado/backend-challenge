@@ -57,6 +57,7 @@ bun run test:infra:down             # derruba a infra de teste e apaga os dados
 ```
 
 - A suíte inteira leva cerca de 3 minutos. As suítes de integração e concorrência exigem `test:infra:up`.
+- Logs de erro e o `DeprecationWarning` do `pg` durante `test:integration` são esperados: os testes derrubam o banco de propósito (TST-I-20 e correlatos).
 - Cada suíte cria um **banco novo** a partir de um template já migrado e **filas com sufixo aleatório**; não há `TRUNCATE` (os triggers do ledger o bloqueiam) nem `sleep` fixo (os testes esperam com `eventually`).
 - Todo teste que toca uma wallet termina chamando `assertLedgerInvariant`: saldo = soma do ledger, cadeia contínua, saldo ≥ 0, `version` coerente.
 - Os títulos dos testes carregam o ID do plano (`TST-U-01`, `TST-I-05`, `TST-C-04`…). A matriz requisito → tarefa → teste está em [specs/traceability.md](specs/traceability.md) (gerada por `bun scripts/check-traceability.ts`).
