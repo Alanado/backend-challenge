@@ -51,7 +51,7 @@ Linha de base da W12: unit 525, integration 476 (121–125 s), concurrency 21. A
 - Se o WSL tivesse sido suspenso durante uma medição, a execução seria descartada; não houve suspensão observada.
 
 ## Perguntas em aberto / bloqueios
-- O estouro de +17 a +26 s no tempo da suíte de integração precisa de decisão do autor (aceitar ou tirar o smoke da suíte).
+- ~~Estouro de +17 a +26 s no tempo da suíte de integração~~ — **resolvido em 2026-10-30: o autor aceitou o tempo como está** (smoke e TST-I-23 permanecem na suíte).
 - O merge na `main` é do autor; a branch está verde e antes do limite de 22:00.
 
 ## Pré-condições da próxima onda verificadas
